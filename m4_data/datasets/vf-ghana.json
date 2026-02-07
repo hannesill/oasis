@@ -1,0 +1,7 @@
+{
+  "name": "vf-ghana",
+  "description": "Virtue Foundation Ghana Healthcare Facilities",
+  "primary_verification_table": "vf.facilities",
+  "modalities": ["TABULAR"],
+  "schema_mapping": {"": "vf"}
+}

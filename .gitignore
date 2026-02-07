@@ -82,13 +82,8 @@ Desktop.ini
 .ruff_cache/
 
 # Datasets and other large files
-m4_data/
 
 notes/
-
-# Agents
-.claude/
-.research/
 
 # Node.js
 node_modules/
