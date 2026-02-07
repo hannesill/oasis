@@ -19,7 +19,6 @@ Tool Surface:
     capability checking before tool invocation.
 """
 
-import json
 from typing import Any
 
 import pandas as pd
@@ -27,11 +26,6 @@ from fastmcp import FastMCP
 
 # MCP Apps imports
 from m4.apps import init_apps
-from m4.apps.cohort_builder import RESOURCE_URI as COHORT_BUILDER_URI
-from m4.apps.cohort_builder import get_ui_html
-from m4.apps.cohort_builder.query_builder import QueryCohortInput
-from m4.apps.cohort_builder.tool import CohortBuilderInput
-from m4.auth import init_oauth2, require_oauth2
 from m4.core.datasets import DatasetRegistry
 from m4.core.exceptions import M4Error
 from m4.core.serialization import serialize_for_mcp
@@ -52,7 +46,6 @@ from m4.core.tools.tabular import (
 mcp = FastMCP("m4")
 
 # Initialize systems
-init_oauth2()
 init_tools()
 init_apps()
 
@@ -70,8 +63,6 @@ _MCP_TOOL_NAMES = frozenset(
         "search_notes",
         "get_note",
         "list_patient_notes",
-        "cohort_builder",
-        "query_cohort",
     }
 )
 
@@ -134,9 +125,7 @@ def _serialize_datasets_result(result: dict[str, Any]) -> str:
         return "No datasets detected."
 
     output = [f"Active dataset: {active}\n"]
-    output.append(
-        f"Backend: {'local (DuckDB)' if backend == 'duckdb' else 'cloud (BigQuery)'}\n"
-    )
+    output.append(f"Backend: {'local (DuckDB)' if backend == 'duckdb' else backend}\n")
 
     for label, info in datasets.items():
         is_active = " (Active)" if info.get("is_active") else ""
@@ -144,26 +133,9 @@ def _serialize_datasets_result(result: dict[str, Any]) -> str:
 
         parquet_icon = "✅" if info.get("parquet_present") else "❌"
         db_icon = "✅" if info.get("db_present") else "❌"
-        bq_status = "✅" if info.get("bigquery_support") else "❌"
 
         output.append(f"  Local Parquet: {parquet_icon}")
         output.append(f"  Local Database: {db_icon}")
-        output.append(f"  BigQuery Support: {bq_status}")
-
-        derived = info.get("derived")
-        if derived and derived.get("supported"):
-            total = derived["total"]
-            materialized = derived.get("materialized")
-            if materialized is not None:
-                icon = "✅" if materialized == total else "⚠️"
-                output.append(
-                    f"  Derived Tables: {icon} {materialized}/{total} materialized"
-                )
-                if materialized < total:
-                    output.append(f"    Run: m4 init-derived {label}")
-            else:
-                output.append(f"  Derived Tables: ✅ {total} available")
-
         output.append("")
 
     return "\n".join(output)
@@ -240,10 +212,7 @@ def _serialize_list_patient_notes_result(result: dict[str, Any]) -> str:
     notes = result.get("notes", {})
 
     if not notes or all(df.empty for df in notes.values()):
-        return (
-            f"{backend_info}\n**No notes found** for subject_id {subject_id}.\n\n"
-            "**Tip:** Verify the subject_id exists in the related MIMIC-IV dataset."
-        )
+        return f"{backend_info}\n**No notes found** for subject_id {subject_id}."
 
     output_parts = [
         backend_info,
@@ -274,7 +243,7 @@ def list_datasets() -> str:
 
     Returns:
         A formatted string listing available datasets, indicating which one is active,
-        and showing availability of local database and BigQuery support.
+        and showing availability of local database.
     """
     try:
         tool = ToolRegistry.get("list_datasets")
@@ -290,7 +259,7 @@ def set_dataset(dataset_name: str) -> str:
     """🔄 Switch the active dataset.
 
     Args:
-        dataset_name: The name of the dataset to switch to (e.g., 'mimic-iv-demo').
+        dataset_name: The name of the dataset to switch to.
 
     Returns:
         Confirmation message with supported tools snapshot, or error if not found.
@@ -316,7 +285,6 @@ def set_dataset(dataset_name: str) -> str:
 
 
 @mcp.tool()
-@require_oauth2
 def get_database_schema() -> str:
     """📚 Discover what data is available in the database.
 
@@ -343,7 +311,6 @@ def get_database_schema() -> str:
 
 
 @mcp.tool()
-@require_oauth2
 def get_table_info(table_name: str, show_sample: bool = True) -> str:
     """🔍 Explore a specific table's structure and see sample data.
 
@@ -374,7 +341,6 @@ def get_table_info(table_name: str, show_sample: bool = True) -> str:
 
 
 @mcp.tool()
-@require_oauth2
 def execute_query(sql_query: str) -> str:
     """🚀 Execute SQL queries to analyze data.
 
@@ -411,7 +377,6 @@ def execute_query(sql_query: str) -> str:
 
 
 @mcp.tool()
-@require_oauth2
 def search_notes(
     query: str,
     note_type: str = "all",
@@ -457,7 +422,6 @@ def search_notes(
 
 
 @mcp.tool()
-@require_oauth2
 def get_note(note_id: str, max_length: int | None = None) -> str:
     """📄 Retrieve full text of a specific clinical note.
 
@@ -490,7 +454,6 @@ def get_note(note_id: str, max_length: int | None = None) -> str:
 
 
 @mcp.tool()
-@require_oauth2
 def list_patient_notes(
     subject_id: int,
     note_type: str = "all",
@@ -501,11 +464,8 @@ def list_patient_notes(
     Returns note metadata (IDs, types, lengths) without full text.
     Use get_note(note_id) to retrieve specific notes.
 
-    **Cross-dataset tip:** Get subject_id from MIMIC-IV queries, then
-    use it here to find related clinical notes.
-
     Args:
-        subject_id: Patient identifier (same as in MIMIC-IV).
+        subject_id: Patient identifier.
         note_type: Type of notes to list ('discharge', 'radiology', or 'all').
         limit: Maximum notes to return (default: 20).
 
@@ -533,138 +493,6 @@ def list_patient_notes(
         return _serialize_list_patient_notes_result(result)
     except M4Error as e:
         return f"**Error:** {e}"
-
-
-# ==========================================
-# MCP APPS - Cohort Builder
-# ==========================================
-
-
-@mcp.resource(COHORT_BUILDER_URI, mime_type="text/html;profile=mcp-app")
-def cohort_builder_ui() -> str:
-    """Serve the cohort builder UI HTML bundle."""
-    return get_ui_html()
-
-
-@mcp.tool()
-@require_oauth2
-def cohort_builder() -> str:
-    """Launch the interactive cohort builder.
-
-    Opens a visual interface for filtering patients by demographics and
-    clinical criteria. See live patient counts as you adjust filters.
-
-    **Requires:** A host that supports MCP Apps (like Claude Desktop).
-    For non-UI hosts, returns dataset information as text.
-
-    Returns:
-        Dataset info and welcome message. UI hosts will render the
-        interactive cohort builder interface.
-    """
-    try:
-        dataset = DatasetRegistry.get_active()
-
-        # Proactive capability check
-        compat_result = _tool_selector.check_compatibility("cohort_builder", dataset)
-        if not compat_result.compatible:
-            return compat_result.error_message
-
-        tool = ToolRegistry.get("cohort_builder")
-        result = tool.invoke(dataset, CohortBuilderInput())
-        return serialize_for_mcp(result)
-    except M4Error as e:
-        return f"**Error:** {e}"
-
-
-@mcp.tool()
-@require_oauth2
-def query_cohort(
-    age_min: int | None = None,
-    age_max: int | None = None,
-    gender: str | None = None,
-    icd_codes: list[str] | None = None,
-    icd_match_all: bool | None = None,
-    has_icu_stay: bool | None = None,
-    in_hospital_mortality: bool | None = None,
-) -> str:
-    """Query cohort counts based on filtering criteria.
-
-    Used by the cohort builder UI for live updates as users adjust filters.
-    Can also be called directly to get cohort statistics.
-
-    Args:
-        age_min: Minimum patient age (0-130, inclusive).
-        age_max: Maximum patient age (0-130, inclusive).
-        gender: Patient gender ('M' or 'F').
-        icd_codes: List of ICD diagnosis code prefixes to filter by.
-        icd_match_all: If True, patient must have ALL ICD codes (AND); default is ANY (OR).
-        has_icu_stay: If True, require ICU stay; if False, exclude ICU patients.
-        in_hospital_mortality: If True, require in-hospital death; if False, exclude deaths.
-
-    Returns:
-        JSON with patient_count, admission_count, demographics, and SQL.
-    """
-    try:
-        dataset = DatasetRegistry.get_active()
-
-        # Proactive capability check
-        compat_result = _tool_selector.check_compatibility("query_cohort", dataset)
-        if not compat_result.compatible:
-            # Return JSON error for UI compatibility
-            return json.dumps({"error": compat_result.error_message})
-
-        tool = ToolRegistry.get("query_cohort")
-        result = tool.invoke(
-            dataset,
-            QueryCohortInput(
-                age_min=age_min,
-                age_max=age_max,
-                gender=gender,
-                icd_codes=icd_codes,
-                icd_match_all=icd_match_all,
-                has_icu_stay=has_icu_stay,
-                in_hospital_mortality=in_hospital_mortality,
-            ),
-        )
-        # Return JSON directly for MCP App UI compatibility
-        return json.dumps(result)
-    except M4Error as e:
-        # Return JSON error for UI compatibility
-        return json.dumps({"error": str(e)})
-
-
-# ==========================================
-# _meta.ui.resourceUri INJECTION
-# ==========================================
-
-
-def _inject_cohort_builder_meta() -> None:
-    """Inject _meta.ui.resourceUri into the cohort_builder tool.
-
-    FastMCP doesn't expose _meta via the decorator, so we monkey-patch
-    the tool's to_mcp_tool method to include it.
-    """
-    try:
-        tool_manager = mcp._tool_manager
-        tool_obj = tool_manager._tools.get("cohort_builder")
-        if tool_obj is None:
-            return
-
-        original_to_mcp = tool_obj.to_mcp_tool
-
-        def patched_to_mcp(**overrides: Any) -> Any:
-            overrides.setdefault("_meta", {"ui": {"resourceUri": COHORT_BUILDER_URI}})
-            return original_to_mcp(**overrides)
-
-        # Bypass Pydantic's __setattr__ validation
-        object.__setattr__(tool_obj, "to_mcp_tool", patched_to_mcp)
-    except (AttributeError, TypeError):
-        # FastMCP internals may change; fail silently
-        pass
-
-
-# Apply the _meta injection
-_inject_cohort_builder_meta()
 
 
 def main():

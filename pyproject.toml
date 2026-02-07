@@ -34,20 +34,14 @@ classifiers = [
 ]
 
 dependencies = [
-    "typer>=0.9.0", # Typer as a core dependency for the CLI
-    "rich>=13.0.0", # For Typer's rich output
+    "typer>=0.9.0",
+    "rich>=13.0.0",
     "requests>=2.30.0",
     "beautifulsoup4>=4.12.0",
     "pandas>=2.0.0",
-    "fastmcp>=2.14.0", # MCP server functionality
-    "google-cloud-bigquery>=3.0.0", # BigQuery support
-    "pyarrow>=10.0.0", # Required by BigQuery to_dataframe()
-    "db-dtypes>=1.0.0", # Required for BigQuery DATE/TIME types
-    "sqlparse>=0.4.0", # SQL parsing for security validation
-    "pyjwt[crypto]>=2.8.0", # JWT token handling with cryptography support
-    "cryptography>=41.0.0", # Cryptographic operations for JWT
-    "python-jose[cryptography]>=3.3.0", # Additional JWT support with crypto
-    "httpx>=0.24.0", # Modern HTTP client for OAuth2 token validation
+    "fastmcp>=2.14.0",
+    "pyarrow>=10.0.0",
+    "sqlparse>=0.4.0",
     "duckdb>=1.4.1",
 ]
 
@@ -79,7 +73,7 @@ source = "file"
 path = "src/m4/__init__.py"
 
 [tool.pdm.build]
-includes = ["src/m4/", "src/m4/skills/**/*.md", "src/m4/core/derived/builtins/**/*.sql", "src/m4/apps/**/*.html"]
+includes = ["src/m4/", "src/m4/skills/**/*.md", "src/m4/apps/**/*.html"]
 
 [tool.ruff]
 line-length = 88
