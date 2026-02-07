@@ -13,9 +13,9 @@ from unittest.mock import patch
 
 import pytest
 
-from m4.core.datasets import DatasetDefinition
-from m4.core.exceptions import DatasetError
-from m4.core.tools.management import (
+from oasis.core.datasets import DatasetDefinition
+from oasis.core.exceptions import DatasetError
+from oasis.core.tools.management import (
     ListDatasetsInput,
     ListDatasetsTool,
     SetDatasetInput,
@@ -24,7 +24,7 @@ from m4.core.tools.management import (
 
 # All ListDatasetsTool tests disable derived lookups by default.
 # Tests that specifically verify derived behavior override this.
-_NO_DERIVED = patch("m4.core.tools.management.has_derived_support", return_value=False)
+_NO_DERIVED = patch("oasis.core.tools.management.has_derived_support", return_value=False)
 
 
 @pytest.fixture
@@ -59,15 +59,15 @@ class TestListDatasetsTool:
         with (
             _NO_DERIVED,
             patch(
-                "m4.core.tools.management.detect_available_local_datasets",
+                "oasis.core.tools.management.detect_available_local_datasets",
                 return_value=mock_availability,
             ),
         ):
             with patch(
-                "m4.core.tools.management.get_active_dataset",
+                "oasis.core.tools.management.get_active_dataset",
                 return_value="mimic-iv-demo",
             ):
-                with patch("m4.core.tools.management.DatasetRegistry.get") as mock_reg:
+                with patch("oasis.core.tools.management.DatasetRegistry.get") as mock_reg:
                     mock_ds = DatasetDefinition(
                         name="test",
                         bigquery_dataset_ids=["test_ds"],
@@ -87,15 +87,15 @@ class TestListDatasetsTool:
         with (
             _NO_DERIVED,
             patch(
-                "m4.core.tools.management.detect_available_local_datasets",
+                "oasis.core.tools.management.detect_available_local_datasets",
                 return_value=mock_availability,
             ),
         ):
             with patch(
-                "m4.core.tools.management.get_active_dataset",
+                "oasis.core.tools.management.get_active_dataset",
                 return_value="mimic-iv-demo",
             ):
-                with patch("m4.core.tools.management.DatasetRegistry.get") as mock_reg:
+                with patch("oasis.core.tools.management.DatasetRegistry.get") as mock_reg:
                     mock_reg.return_value = DatasetDefinition(
                         name="test", bigquery_dataset_ids=[]
                     )
@@ -114,15 +114,15 @@ class TestListDatasetsTool:
         with (
             _NO_DERIVED,
             patch(
-                "m4.core.tools.management.detect_available_local_datasets",
+                "oasis.core.tools.management.detect_available_local_datasets",
                 return_value=mock_availability,
             ),
         ):
             with patch(
-                "m4.core.tools.management.get_active_dataset",
+                "oasis.core.tools.management.get_active_dataset",
                 return_value="mimic-iv-demo",
             ):
-                with patch("m4.core.tools.management.DatasetRegistry.get") as mock_reg:
+                with patch("oasis.core.tools.management.DatasetRegistry.get") as mock_reg:
                     mock_reg.return_value = DatasetDefinition(
                         name="test", bigquery_dataset_ids=[]
                     )
@@ -138,15 +138,15 @@ class TestListDatasetsTool:
         with (
             _NO_DERIVED,
             patch(
-                "m4.core.tools.management.detect_available_local_datasets",
+                "oasis.core.tools.management.detect_available_local_datasets",
                 return_value=mock_availability,
             ),
         ):
             with patch(
-                "m4.core.tools.management.get_active_dataset",
+                "oasis.core.tools.management.get_active_dataset",
                 return_value="mimic-iv-demo",
             ):
-                with patch("m4.core.tools.management.DatasetRegistry.get") as mock_reg:
+                with patch("oasis.core.tools.management.DatasetRegistry.get") as mock_reg:
                     mock_ds = DatasetDefinition(
                         name="test",
                         bigquery_dataset_ids=["bq_dataset"],  # Has BigQuery
@@ -164,12 +164,12 @@ class TestListDatasetsTool:
         with (
             _NO_DERIVED,
             patch(
-                "m4.core.tools.management.detect_available_local_datasets",
+                "oasis.core.tools.management.detect_available_local_datasets",
                 return_value={},
             ),
         ):
             with patch(
-                "m4.core.tools.management.get_active_dataset",
+                "oasis.core.tools.management.get_active_dataset",
                 return_value=None,
             ):
                 tool = ListDatasetsTool()
@@ -182,19 +182,19 @@ class TestListDatasetsTool:
         with (
             _NO_DERIVED,
             patch(
-                "m4.core.tools.management.detect_available_local_datasets",
+                "oasis.core.tools.management.detect_available_local_datasets",
                 return_value=mock_availability,
             ),
         ):
             with patch(
-                "m4.core.tools.management.get_active_dataset",
+                "oasis.core.tools.management.get_active_dataset",
                 return_value="mimic-iv-demo",
             ):
-                with patch("m4.core.tools.management.DatasetRegistry.get") as mock_reg:
+                with patch("oasis.core.tools.management.DatasetRegistry.get") as mock_reg:
                     mock_reg.return_value = DatasetDefinition(
                         name="test", bigquery_dataset_ids=[]
                     )
-                    with patch.dict("os.environ", {"M4_BACKEND": "duckdb"}):
+                    with patch.dict("os.environ", {"OASIS_BACKEND": "duckdb"}):
                         tool = ListDatasetsTool()
                         result = tool.invoke(dummy_dataset, ListDatasetsInput())
 
@@ -223,16 +223,16 @@ class TestSetDatasetTool:
     def test_invoke_switches_to_valid_dataset(self, mock_availability, dummy_dataset):
         """Test successful dataset switch."""
         with patch(
-            "m4.core.tools.management.detect_available_local_datasets",
+            "oasis.core.tools.management.detect_available_local_datasets",
             return_value=mock_availability,
         ):
-            with patch("m4.core.tools.management.set_active_dataset") as mock_set:
-                with patch("m4.core.tools.management.DatasetRegistry.get") as mock_reg:
+            with patch("oasis.core.tools.management.set_active_dataset") as mock_set:
+                with patch("oasis.core.tools.management.DatasetRegistry.get") as mock_reg:
                     mock_reg.return_value = DatasetDefinition(
                         name="mimic-iv-demo", bigquery_dataset_ids=[]
                     )
                     with patch(
-                        "m4.core.tools.management.get_active_backend",
+                        "oasis.core.tools.management.get_active_backend",
                         return_value="duckdb",
                     ):
                         tool = SetDatasetTool()
@@ -245,10 +245,10 @@ class TestSetDatasetTool:
     def test_invoke_rejects_unknown_dataset(self, mock_availability, dummy_dataset):
         """Test rejection of unknown dataset raises DatasetError."""
         with patch(
-            "m4.core.tools.management.detect_available_local_datasets",
+            "oasis.core.tools.management.detect_available_local_datasets",
             return_value=mock_availability,
         ):
-            with patch("m4.core.tools.management.set_active_dataset") as mock_set:
+            with patch("oasis.core.tools.management.set_active_dataset") as mock_set:
                 tool = SetDatasetTool()
                 params = SetDatasetInput(dataset_name="unknown-dataset")
 
@@ -263,10 +263,10 @@ class TestSetDatasetTool:
     ):
         """Test that error message lists supported datasets."""
         with patch(
-            "m4.core.tools.management.detect_available_local_datasets",
+            "oasis.core.tools.management.detect_available_local_datasets",
             return_value=mock_availability,
         ):
-            with patch("m4.core.tools.management.set_active_dataset"):
+            with patch("oasis.core.tools.management.set_active_dataset"):
                 tool = SetDatasetTool()
                 params = SetDatasetInput(dataset_name="nonexistent")
 
@@ -287,15 +287,15 @@ class TestSetDatasetTool:
         }
 
         with patch(
-            "m4.core.tools.management.detect_available_local_datasets",
+            "oasis.core.tools.management.detect_available_local_datasets",
             return_value=availability,
         ):
-            with patch("m4.core.tools.management.set_active_dataset"):
-                with patch("m4.core.tools.management.DatasetRegistry.get") as mock_reg:
+            with patch("oasis.core.tools.management.set_active_dataset"):
+                with patch("oasis.core.tools.management.DatasetRegistry.get") as mock_reg:
                     mock_reg.return_value = DatasetDefinition(
                         name="mimic-iv-demo", bigquery_dataset_ids=[]
                     )
-                    with patch.dict("os.environ", {"M4_BACKEND": "duckdb"}):
+                    with patch.dict("os.environ", {"OASIS_BACKEND": "duckdb"}):
                         tool = SetDatasetTool()
                         params = SetDatasetInput(dataset_name="mimic-iv-demo")
                         result = tool.invoke(dummy_dataset, params)
@@ -305,16 +305,16 @@ class TestSetDatasetTool:
     def test_invoke_blocks_no_bigquery_config(self, mock_availability, dummy_dataset):
         """Test that switching to a dataset without BigQuery config is blocked."""
         with patch(
-            "m4.core.tools.management.detect_available_local_datasets",
+            "oasis.core.tools.management.detect_available_local_datasets",
             return_value=mock_availability,
         ):
-            with patch("m4.core.tools.management.set_active_dataset") as mock_set:
-                with patch("m4.core.tools.management.DatasetRegistry.get") as mock_reg:
+            with patch("oasis.core.tools.management.set_active_dataset") as mock_set:
+                with patch("oasis.core.tools.management.DatasetRegistry.get") as mock_reg:
                     mock_reg.return_value = DatasetDefinition(
                         name="mimic-iv-demo",
                         bigquery_dataset_ids=[],  # No BigQuery config
                     )
-                    with patch.dict("os.environ", {"M4_BACKEND": "bigquery"}):
+                    with patch.dict("os.environ", {"OASIS_BACKEND": "bigquery"}):
                         tool = SetDatasetTool()
                         params = SetDatasetInput(dataset_name="mimic-iv-demo")
 
@@ -329,16 +329,16 @@ class TestSetDatasetTool:
     def test_invoke_case_insensitive(self, mock_availability, dummy_dataset):
         """Test that dataset name lookup is case-insensitive."""
         with patch(
-            "m4.core.tools.management.detect_available_local_datasets",
+            "oasis.core.tools.management.detect_available_local_datasets",
             return_value=mock_availability,
         ):
-            with patch("m4.core.tools.management.set_active_dataset") as mock_set:
-                with patch("m4.core.tools.management.DatasetRegistry.get") as mock_reg:
+            with patch("oasis.core.tools.management.set_active_dataset") as mock_set:
+                with patch("oasis.core.tools.management.DatasetRegistry.get") as mock_reg:
                     mock_reg.return_value = DatasetDefinition(
                         name="mimic-iv-demo", bigquery_dataset_ids=[]
                     )
                     with patch(
-                        "m4.core.tools.management.get_active_backend",
+                        "oasis.core.tools.management.get_active_backend",
                         return_value="duckdb",
                     ):
                         tool = SetDatasetTool()
@@ -401,28 +401,28 @@ class TestListDatasetsDerivedInfo:
 
         with (
             patch(
-                "m4.core.tools.management.detect_available_local_datasets",
+                "oasis.core.tools.management.detect_available_local_datasets",
                 return_value=availability,
             ),
             patch(
-                "m4.core.tools.management.get_active_dataset",
+                "oasis.core.tools.management.get_active_dataset",
                 return_value="mimic-iv",
             ),
             patch(
-                "m4.core.tools.management.get_active_backend",
+                "oasis.core.tools.management.get_active_backend",
                 return_value="duckdb",
             ),
-            patch("m4.core.tools.management.DatasetRegistry.get") as mock_reg,
+            patch("oasis.core.tools.management.DatasetRegistry.get") as mock_reg,
             patch(
-                "m4.core.tools.management.has_derived_support",
+                "oasis.core.tools.management.has_derived_support",
                 return_value=True,
             ),
             patch(
-                "m4.core.tools.management.list_builtins",
+                "oasis.core.tools.management.list_builtins",
                 return_value=["age", "sofa", "sepsis3"],
             ),
             patch(
-                "m4.core.tools.management.get_derived_table_count",
+                "oasis.core.tools.management.get_derived_table_count",
                 return_value=2,
             ),
         ):
@@ -451,28 +451,28 @@ class TestListDatasetsDerivedInfo:
 
         with (
             patch(
-                "m4.core.tools.management.detect_available_local_datasets",
+                "oasis.core.tools.management.detect_available_local_datasets",
                 return_value=availability,
             ),
             patch(
-                "m4.core.tools.management.get_active_dataset",
+                "oasis.core.tools.management.get_active_dataset",
                 return_value="mimic-iv",
             ),
             patch(
-                "m4.core.tools.management.get_active_backend",
+                "oasis.core.tools.management.get_active_backend",
                 return_value="duckdb",
             ),
-            patch("m4.core.tools.management.DatasetRegistry.get") as mock_reg,
+            patch("oasis.core.tools.management.DatasetRegistry.get") as mock_reg,
             patch(
-                "m4.core.tools.management.has_derived_support",
+                "oasis.core.tools.management.has_derived_support",
                 return_value=True,
             ),
             patch(
-                "m4.core.tools.management.list_builtins",
+                "oasis.core.tools.management.list_builtins",
                 return_value=["age", "sofa"],
             ),
             patch(
-                "m4.core.tools.management.get_derived_table_count",
+                "oasis.core.tools.management.get_derived_table_count",
             ) as mock_count,
         ):
             mock_reg.return_value = DatasetDefinition(
@@ -498,24 +498,24 @@ class TestListDatasetsDerivedInfo:
 
         with (
             patch(
-                "m4.core.tools.management.detect_available_local_datasets",
+                "oasis.core.tools.management.detect_available_local_datasets",
                 return_value=availability,
             ),
             patch(
-                "m4.core.tools.management.get_active_dataset",
+                "oasis.core.tools.management.get_active_dataset",
                 return_value="mimic-iv",
             ),
             patch(
-                "m4.core.tools.management.get_active_backend",
+                "oasis.core.tools.management.get_active_backend",
                 return_value="bigquery",
             ),
-            patch("m4.core.tools.management.DatasetRegistry.get") as mock_reg,
+            patch("oasis.core.tools.management.DatasetRegistry.get") as mock_reg,
             patch(
-                "m4.core.tools.management.has_derived_support",
+                "oasis.core.tools.management.has_derived_support",
                 return_value=True,
             ),
             patch(
-                "m4.core.tools.management.list_builtins",
+                "oasis.core.tools.management.list_builtins",
                 return_value=["age", "sofa", "sepsis3"],
             ),
         ):
@@ -543,20 +543,20 @@ class TestListDatasetsDerivedInfo:
 
         with (
             patch(
-                "m4.core.tools.management.detect_available_local_datasets",
+                "oasis.core.tools.management.detect_available_local_datasets",
                 return_value=availability,
             ),
             patch(
-                "m4.core.tools.management.get_active_dataset",
+                "oasis.core.tools.management.get_active_dataset",
                 return_value="eicu",
             ),
             patch(
-                "m4.core.tools.management.get_active_backend",
+                "oasis.core.tools.management.get_active_backend",
                 return_value="duckdb",
             ),
-            patch("m4.core.tools.management.DatasetRegistry.get") as mock_reg,
+            patch("oasis.core.tools.management.DatasetRegistry.get") as mock_reg,
             patch(
-                "m4.core.tools.management.has_derived_support",
+                "oasis.core.tools.management.has_derived_support",
                 return_value=False,
             ),
         ):

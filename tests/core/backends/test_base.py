@@ -1,4 +1,4 @@
-"""Tests for m4.core.backends.base module.
+"""Tests for oasis.core.backends.base module.
 
 Tests cover:
 - QueryResult dataclass
@@ -8,7 +8,7 @@ Tests cover:
 
 import pandas as pd
 
-from m4.core.backends.base import (
+from oasis.core.backends.base import (
     Backend,
     BackendError,
     ConnectionError,
@@ -305,6 +305,6 @@ class TestSanitizeErrorMessage:
         """Backend name is included in debug log message."""
         import logging
 
-        with caplog.at_level(logging.DEBUG, logger="m4"):
+        with caplog.at_level(logging.DEBUG, logger="oasis"):
             sanitize_error_message(Exception("test error"), "bigquery")
         assert "[bigquery]" in caplog.text

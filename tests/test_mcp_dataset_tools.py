@@ -5,8 +5,8 @@ from unittest.mock import Mock, patch
 import pytest
 from fastmcp import Client
 
-from m4.core.tools import init_tools
-from m4.mcp_server import mcp
+from oasis.core.tools import init_tools
+from oasis.mcp_server import mcp
 
 
 class TestMCPDatasetTools:
@@ -35,21 +35,21 @@ class TestMCPDatasetTools:
             },
         }
 
-        # Patch at the location where it's imported (m4.core.tools.management)
+        # Patch at the location where it's imported (oasis.core.tools.management)
         with patch(
-            "m4.core.tools.management.detect_available_local_datasets",
+            "oasis.core.tools.management.detect_available_local_datasets",
             return_value=mock_availability,
         ):
             with patch(
-                "m4.core.tools.management.get_active_dataset",
+                "oasis.core.tools.management.get_active_dataset",
                 return_value="mimic-iv-demo",
             ):
                 with patch(
-                    "m4.config.get_active_dataset",
+                    "oasis.config.get_active_dataset",
                     return_value="mimic-iv-demo",
                 ):
                     with patch(
-                        "m4.core.tools.management.DatasetRegistry.get"
+                        "oasis.core.tools.management.DatasetRegistry.get"
                     ) as mock_get:
                         # Mock ds_def
                         mock_ds = Mock()
@@ -75,14 +75,14 @@ class TestMCPDatasetTools:
         }
 
         with patch(
-            "m4.core.tools.management.detect_available_local_datasets",
+            "oasis.core.tools.management.detect_available_local_datasets",
             return_value=mock_availability,
         ):
-            with patch("m4.core.tools.management.set_active_dataset") as mock_set:
+            with patch("oasis.core.tools.management.set_active_dataset") as mock_set:
                 with patch(
-                    "m4.config.get_active_dataset", return_value="mimic-iv-demo"
+                    "oasis.config.get_active_dataset", return_value="mimic-iv-demo"
                 ):
-                    with patch("m4.core.tools.management.DatasetRegistry.get"):
+                    with patch("oasis.core.tools.management.DatasetRegistry.get"):
                         async with Client(mcp) as client:
                             result = await client.call_tool(
                                 "set_dataset", {"dataset_name": "mimic-iv-demo"}
@@ -101,14 +101,14 @@ class TestMCPDatasetTools:
         mock_availability = {"mimic-iv-demo": {}}
 
         with patch(
-            "m4.core.tools.management.detect_available_local_datasets",
+            "oasis.core.tools.management.detect_available_local_datasets",
             return_value=mock_availability,
         ):
-            with patch("m4.core.tools.management.set_active_dataset") as mock_set:
+            with patch("oasis.core.tools.management.set_active_dataset") as mock_set:
                 with patch(
-                    "m4.config.get_active_dataset", return_value="mimic-iv-demo"
+                    "oasis.config.get_active_dataset", return_value="mimic-iv-demo"
                 ):
-                    with patch("m4.core.tools.management.DatasetRegistry.get"):
+                    with patch("oasis.core.tools.management.DatasetRegistry.get"):
                         async with Client(mcp) as client:
                             result = await client.call_tool(
                                 "set_dataset", {"dataset_name": "invalid-ds"}

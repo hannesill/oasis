@@ -1,0 +1,326 @@
+"""
+Setup script for OASIS MCP Server with Claude Desktop.
+Automatically configures Claude Desktop to use the OASIS MCP server.
+"""
+
+import json
+import os
+import shutil
+from pathlib import Path
+
+from oasis.config import get_active_backend
+
+
+def get_claude_config_path():
+    """Get the Claude Desktop configuration file path."""
+    home = Path.home()
+
+    # macOS path
+    claude_config = (
+        home
+        / "Library"
+        / "Application Support"
+        / "Claude"
+        / "claude_desktop_config.json"
+    )
+    if claude_config.parent.exists():
+        return claude_config
+
+    # Windows path
+    claude_config = (
+        home / "AppData" / "Roaming" / "Claude" / "claude_desktop_config.json"
+    )
+    if claude_config.parent.exists():
+        return claude_config
+
+    # Linux path
+    claude_config = home / ".config" / "Claude" / "claude_desktop_config.json"
+    if claude_config.parent.exists():
+        return claude_config
+
+    raise FileNotFoundError("Could not find Claude Desktop configuration directory")
+
+
+def get_current_directory():
+    """Get the current OASIS project directory."""
+    p = Path(__file__).resolve()
+
+    # Try to find pyproject.toml
+    search_p = p
+    while search_p != search_p.parent:
+        if (search_p / "pyproject.toml").exists():
+            return search_p
+        search_p = search_p.parent
+
+    # If installed as package and no pyproject.toml found, use CWD
+    return Path.cwd()
+
+
+def get_python_path():
+    """Get the Python executable path."""
+    # Try to use the current virtual environment
+    if "VIRTUAL_ENV" in os.environ:
+        venv_python = Path(os.environ["VIRTUAL_ENV"]) / "bin" / "python"
+        if venv_python.exists():
+            return str(venv_python)
+
+    # Fall back to system python
+    return shutil.which("python") or shutil.which("python3") or "python"
+
+
+def find_oasis_data_dir(working_directory: Path) -> Path:
+    """Find the actual oasis_data directory by searching upward from working_directory."""
+    cwd = working_directory.resolve()
+    for path in [cwd, *cwd.parents]:
+        data_dir = path / "oasis_data"
+        if data_dir.exists() and data_dir.is_dir():
+            # Check for characteristic OASIS data artifacts
+            if (
+                (data_dir / "config.json").exists()
+                or (data_dir / "databases").exists()
+                or (data_dir / "parquet").exists()
+                or (data_dir / "datasets").exists()
+                or (data_dir / "raw_files").exists()
+            ):
+                return data_dir
+    # If not found, return the default location
+    return working_directory / "oasis_data"
+
+
+def create_mcp_config(
+    backend="duckdb",
+    db_path=None,
+    project_id=None,
+    oauth2_enabled=False,
+    oauth2_config=None,
+):
+    """Create MCP server configuration."""
+    current_dir = get_current_directory()
+    python_path = get_python_path()
+
+    # Find the actual oasis_data directory (may be in parent directory)
+    oasis_data_dir = find_oasis_data_dir(current_dir)
+
+    config = {
+        "mcpServers": {
+            "oasis": {
+                "command": python_path,
+                "args": ["-m", "oasis.mcp_server"],
+                "cwd": str(current_dir),
+                "env": {
+                    # Backend is read from oasis_data/config.json (set via `oasis backend`)
+                    # Set OASIS_DATA_DIR to ensure server finds data in the correct location
+                    "OASIS_DATA_DIR": str(oasis_data_dir),
+                },
+            }
+        }
+    }
+
+    # Add PYTHONPATH only if running from source (checked by presence of pyproject.toml)
+    if (current_dir / "pyproject.toml").exists():
+        config["mcpServers"]["oasis"]["env"]["PYTHONPATH"] = str(current_dir / "src")
+
+    # Add backend-specific environment variables
+    if backend == "duckdb" and db_path:
+        config["mcpServers"]["oasis"]["env"]["OASIS_DB_PATH"] = db_path
+    elif backend == "bigquery" and project_id:
+        config["mcpServers"]["oasis"]["env"]["OASIS_PROJECT_ID"] = project_id
+        config["mcpServers"]["oasis"]["env"]["GOOGLE_CLOUD_PROJECT"] = project_id
+
+    # Add OAuth2 configuration if enabled
+    if oauth2_enabled and oauth2_config:
+        config["mcpServers"]["oasis"]["env"].update(
+            {
+                "OASIS_OAUTH2_ENABLED": "true",
+                "OASIS_OAUTH2_ISSUER_URL": oauth2_config.get("issuer_url", ""),
+                "OASIS_OAUTH2_AUDIENCE": oauth2_config.get("audience", ""),
+                "OASIS_OAUTH2_REQUIRED_SCOPES": oauth2_config.get(
+                    "required_scopes", "read:mimic-data"
+                ),
+                "OASIS_OAUTH2_JWKS_URL": oauth2_config.get("jwks_url", ""),
+            }
+        )
+
+        # Optional OAuth2 settings
+        if oauth2_config.get("client_id"):
+            config["mcpServers"]["oasis"]["env"]["OASIS_OAUTH2_CLIENT_ID"] = oauth2_config[
+                "client_id"
+            ]
+        if oauth2_config.get("rate_limit_requests"):
+            config["mcpServers"]["oasis"]["env"]["OASIS_OAUTH2_RATE_LIMIT_REQUESTS"] = str(
+                oauth2_config["rate_limit_requests"]
+            )
+
+    return config
+
+
+def setup_claude_desktop(
+    backend="duckdb",
+    db_path=None,
+    project_id=None,
+    oauth2_enabled=False,
+    oauth2_config=None,
+):
+    """Setup Claude Desktop with OASIS MCP server."""
+    try:
+        claude_config_path = get_claude_config_path()
+        print(f"Found Claude Desktop config at: {claude_config_path}")
+
+        # Load existing config or create new one
+        existing_config = {}
+        if claude_config_path.exists() and claude_config_path.stat().st_size > 0:
+            try:
+                with open(claude_config_path) as f:
+                    existing_config = json.load(f)
+                print("Loaded existing Claude Desktop configuration")
+            except json.JSONDecodeError:
+                print("Found corrupted config file, creating new configuration")
+                existing_config = {}
+        else:
+            print("Creating new Claude Desktop configuration")
+
+        # Create MCP config
+        mcp_config = create_mcp_config(
+            backend, db_path, project_id, oauth2_enabled, oauth2_config
+        )
+
+        # Merge configurations
+        if "mcpServers" not in existing_config:
+            existing_config["mcpServers"] = {}
+
+        existing_config["mcpServers"].update(mcp_config["mcpServers"])
+
+        # Ensure directory exists
+        claude_config_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Write updated config
+        with open(claude_config_path, "w") as f:
+            json.dump(existing_config, f, indent=2)
+
+        print("Successfully configured Claude Desktop!")
+        print(f"Config file: {claude_config_path}")
+
+        active_backend = get_active_backend()
+        print(f"Backend: {active_backend} (use 'oasis backend' to switch)")
+
+        if active_backend == "duckdb":
+            db_path_display = (
+                db_path or "default (oasis_data/databases/mimic_iv_demo.duckdb)"
+            )
+            print(f"Database: {db_path_display}")
+        elif active_backend == "bigquery":
+            project_display = project_id or "physionet-data"
+            print(f"Project: {project_display}")
+
+        if oauth2_enabled:
+            print("OAuth2 Authentication: Enabled")
+            if oauth2_config:
+                print(f"Issuer: {oauth2_config.get('issuer_url', 'Not configured')}")
+                print(f"Audience: {oauth2_config.get('audience', 'Not configured')}")
+                print(
+                    f"Required Scopes: {oauth2_config.get('required_scopes', 'read:mimic-data')}"
+                )
+            print("\nSecurity Notice:")
+            print("   - OAuth2 authentication is now required for all API calls")
+            print("   - Ensure you have a valid access token with the required scopes")
+            print(
+                "   - Set OASIS_OAUTH2_TOKEN environment variable with your Bearer token"
+            )
+        else:
+            print("OAuth2 Authentication: Disabled")
+
+        print("\nPlease restart Claude Desktop to apply changes")
+
+        return True
+
+    except Exception as e:
+        print(f"Error setting up Claude Desktop: {e}")
+        return False
+
+
+def main():
+    """Main setup function."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Setup OASIS MCP Server with Claude Desktop"
+    )
+    parser.add_argument(
+        "--backend",
+        choices=["duckdb", "bigquery"],
+        default="duckdb",
+        help="Backend to use (default: duckdb)",
+    )
+    parser.add_argument(
+        "--db-path", help="Path to DuckDB database (for duckdb backend)"
+    )
+    parser.add_argument(
+        "--project-id", help="Google Cloud project ID (for bigquery backend)"
+    )
+    parser.add_argument(
+        "--enable-oauth2", action="store_true", help="Enable OAuth2 authentication"
+    )
+    parser.add_argument(
+        "--oauth2-issuer", help="OAuth2 issuer URL (e.g., https://auth.example.com)"
+    )
+    parser.add_argument("--oauth2-audience", help="OAuth2 audience (e.g., oasis-api)")
+    parser.add_argument(
+        "--oauth2-scopes",
+        default="read:mimic-data",
+        help="Required OAuth2 scopes (comma-separated)",
+    )
+
+    args = parser.parse_args()
+
+    # Validate backend-specific arguments
+    if args.backend in ("duckdb",) and args.project_id:
+        print("Error: --project-id can only be used with --backend bigquery")
+        exit(1)
+
+    if args.backend == "bigquery" and args.db_path:
+        print("Error: --db-path can only be used with --backend duckdb")
+        exit(1)
+
+    # Require project_id for BigQuery backend
+    if args.backend == "bigquery" and not args.project_id:
+        print("Error: --project-id is required when using --backend bigquery")
+        exit(1)
+
+    print("Setting up OASIS MCP Server with Claude Desktop...")
+    print(f"Backend: {get_active_backend()} (from oasis_data/config.json)")
+
+    # Prepare OAuth2 configuration if enabled
+    oauth2_config = None
+    if args.enable_oauth2:
+        if not args.oauth2_issuer or not args.oauth2_audience:
+            print(
+                "Error: --oauth2-issuer and --oauth2-audience are required when --enable-oauth2 is used"
+            )
+            exit(1)
+
+        oauth2_config = {
+            "issuer_url": args.oauth2_issuer,
+            "audience": args.oauth2_audience,
+            "required_scopes": args.oauth2_scopes,
+        }
+
+    success = setup_claude_desktop(
+        backend=args.backend,
+        db_path=args.db_path,
+        project_id=args.project_id,
+        oauth2_enabled=args.enable_oauth2,
+        oauth2_config=oauth2_config,
+    )
+
+    if success:
+        print("\nSetup complete! You can now use OASIS tools in Claude Desktop.")
+        print(
+            "\nTry asking Claude: 'What tools do you have available for healthcare data?'"
+        )
+    else:
+        print("\nSetup failed. Please check the error messages above.")
+        exit(1)
+
+
+if __name__ == "__main__":
+    main()

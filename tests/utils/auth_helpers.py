@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 
 def generate_test_token(
     issuer: str = "https://test-issuer.example.com",
-    audience: str = "m4-api",
+    audience: str = "oasis-api",
     subject: str = "test-user",
     scopes: list[str] | None = None,
     expires_in: int = 3600,

@@ -1,4 +1,4 @@
-"""Tests for m4.core.tools.base module.
+"""Tests for oasis.core.tools.base module.
 
 Tests cover:
 - ToolInput and ToolOutput base classes
@@ -8,11 +8,11 @@ Tests cover:
 
 from dataclasses import dataclass
 
-from m4.core.datasets import (
+from oasis.core.datasets import (
     DatasetDefinition,
     Modality,
 )
-from m4.core.tools.base import Tool, ToolInput, ToolOutput
+from oasis.core.tools.base import Tool, ToolInput, ToolOutput
 
 
 class TestToolInputOutput:

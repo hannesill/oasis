@@ -1,6 +1,6 @@
 # MCP Tools Reference
 
-M4 exposes these tools to AI clients via the Model Context Protocol. Tools are filtered based on the active dataset's modality.
+OASIS exposes these tools to AI clients via the Model Context Protocol. Tools are filtered based on the active dataset's modality.
 
 ## Dataset Management
 
@@ -83,10 +83,10 @@ Suggestions:
 
 ## Python API Alternative
 
-For complex analysis beyond simple queries, M4 provides a Python API that returns native types (DataFrames) instead of formatted strings:
+For complex analysis beyond simple queries, OASIS provides a Python API that returns native types (DataFrames) instead of formatted strings:
 
 ```python
-from m4 import set_dataset, execute_query
+from oasis import set_dataset, execute_query
 
 set_dataset("vf-ghana")
 df = execute_query("SELECT * FROM vf.facilities LIMIT 10")  # Returns pandas DataFrame

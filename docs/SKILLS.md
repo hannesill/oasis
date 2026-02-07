@@ -4,7 +4,7 @@ Skills are contextual prompts that teach AI coding assistants how to accomplish 
 
 ## What Skills Do
 
-Without skills, an AI assistant might guess at APIs or make assumptions about data. With M4 skills installed, the assistant knows the dataset schema, query patterns, and domain-specific logic.
+Without skills, an AI assistant might guess at APIs or make assumptions about data. With OASIS skills installed, the assistant knows the dataset schema, query patterns, and domain-specific logic.
 
 Skills activate automatically when relevant.
 
@@ -12,16 +12,16 @@ Skills activate automatically when relevant.
 
 ```bash
 # Interactive tool and skill selection
-m4 skills
+oasis skills
 
 # Install all skills for specific tools
-m4 skills --tools claude
+oasis skills --tools claude
 
 # Install specific skills by name
-m4 skills --tools claude --skills vf-schema,idp-extraction
+oasis skills --tools claude --skills vf-schema,idp-extraction
 
 # List installed skills
-m4 skills --list
+oasis skills --list
 ```
 
 Skills are installed to `.claude/skills/` (or equivalent for other tools). AI assistants automatically discover skills in these locations.
@@ -31,7 +31,7 @@ Skills are installed to `.claude/skills/` (or equivalent for other tools). AI as
 Each skill is a directory containing a `SKILL.md` file:
 
 ```
-src/m4/skills/clinical/
+src/oasis/skills/clinical/
 ├── vf-schema/
 │   └── SKILL.md
 ├── idp-extraction/
@@ -55,7 +55,7 @@ category: clinical
 [Detailed instructions, SQL examples, domain context...]
 ```
 
-The frontmatter has four required fields: `name`, `description`, `tier` (one of `validated`, `expert`, `community`), and `category` (`clinical` or `system`). See `src/m4/skills/SKILL_FORMAT.md` for full details.
+The frontmatter has four required fields: `name`, `description`, `tier` (one of `validated`, `expert`, `community`), and `category` (`clinical` or `system`). See `src/oasis/skills/SKILL_FORMAT.md` for full details.
 
 ## Creating Custom Skills
 
@@ -91,7 +91,7 @@ ORDER BY facility_count
 \`\`\`
 ```
 
-Place in `src/m4/skills/clinical/medical-desert-analysis/SKILL.md`.
+Place in `src/oasis/skills/clinical/medical-desert-analysis/SKILL.md`.
 
 ## Tips for Effective Skills
 

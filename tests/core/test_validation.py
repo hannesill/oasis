@@ -1,7 +1,7 @@
 """Tests for SQL validation and parameter sanitization."""
 
-from m4.core.datasets import DatasetRegistry
-from m4.core.validation import (
+from oasis.core.datasets import DatasetRegistry
+from oasis.core.validation import (
     format_error_with_guidance,
     is_safe_query,
     validate_table_name,

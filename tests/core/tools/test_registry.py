@@ -2,8 +2,8 @@
 
 import pytest
 
-from m4.core.datasets import DatasetDefinition, DatasetRegistry, Modality
-from m4.core.tools import Tool, ToolInput, ToolOutput, ToolRegistry, ToolSelector
+from oasis.core.datasets import DatasetDefinition, DatasetRegistry, Modality
+from oasis.core.tools import Tool, ToolInput, ToolOutput, ToolRegistry, ToolSelector
 
 
 # Mock tool classes for testing
@@ -300,7 +300,7 @@ class TestInitTools:
 
     def test_init_tools_registers_all_tools(self):
         """Test that init_tools registers all expected tools."""
-        from m4.core.tools import init_tools, reset_tools
+        from oasis.core.tools import init_tools, reset_tools
 
         # Ensure clean state
         reset_tools()
@@ -334,7 +334,7 @@ class TestInitTools:
 
     def test_init_tools_is_idempotent(self):
         """Test that calling init_tools multiple times is safe."""
-        from m4.core.tools import init_tools, reset_tools
+        from oasis.core.tools import init_tools, reset_tools
 
         reset_tools()
 
@@ -351,7 +351,7 @@ class TestInitTools:
 
     def test_reset_tools_clears_everything(self):
         """Test that reset_tools clears all registered tools."""
-        from m4.core.tools import init_tools, reset_tools
+        from oasis.core.tools import init_tools, reset_tools
 
         init_tools()
         assert len(ToolRegistry.list_all()) == 8
@@ -367,7 +367,7 @@ class TestInitTools:
 
     def test_real_tools_conform_to_protocol(self):
         """Test that all real tool classes conform to the Tool protocol."""
-        from m4.core.tools import (
+        from oasis.core.tools import (
             ExecuteQueryTool,
             GetDatabaseSchemaTool,
             GetNoteTool,
@@ -402,7 +402,7 @@ class TestInitTools:
 
     def test_selector_with_real_tools(self):
         """Test ToolSelector with the actual registered tools."""
-        from m4.core.tools import init_tools, reset_tools
+        from oasis.core.tools import init_tools, reset_tools
 
         reset_tools()
         init_tools()
@@ -433,7 +433,7 @@ class TestInitTools:
 
     def test_management_tools_always_compatible(self):
         """Test that management tools work with any dataset."""
-        from m4.core.tools import ListDatasetsTool, SetDatasetTool
+        from oasis.core.tools import ListDatasetsTool, SetDatasetTool
 
         list_tool = ListDatasetsTool()
         set_tool = SetDatasetTool()

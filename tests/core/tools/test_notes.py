@@ -16,10 +16,10 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from m4.core.backends.base import QueryResult
-from m4.core.datasets import DatasetDefinition, Modality
-from m4.core.exceptions import QueryError
-from m4.core.tools.notes import (
+from oasis.core.backends.base import QueryResult
+from oasis.core.datasets import DatasetDefinition, Modality
+from oasis.core.exceptions import QueryError
+from oasis.core.tools.notes import (
     GetNoteInput,
     GetNoteTool,
     ListPatientNotesInput,
@@ -75,7 +75,7 @@ class TestSearchNotesTool:
         )
 
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = SearchNotesTool()
@@ -104,7 +104,7 @@ class TestSearchNotesTool:
         )
 
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = SearchNotesTool()
@@ -133,7 +133,7 @@ class TestSearchNotesTool:
         )
 
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = SearchNotesTool()
@@ -146,7 +146,7 @@ class TestSearchNotesTool:
     def test_invoke_invalid_note_type_raises(self, notes_dataset, mock_backend):
         """Test that an invalid note_type raises QueryError."""
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = SearchNotesTool()
@@ -169,7 +169,7 @@ class TestSearchNotesTool:
         )
 
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = SearchNotesTool()
@@ -189,7 +189,7 @@ class TestSearchNotesTool:
         )
 
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = SearchNotesTool()
@@ -215,7 +215,7 @@ class TestSearchNotesTool:
         )
 
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = SearchNotesTool()
@@ -245,7 +245,7 @@ class TestSearchNotesTool:
         )
 
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = SearchNotesTool()
@@ -325,7 +325,7 @@ class TestGetNoteTool:
         )
 
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = GetNoteTool()
@@ -357,7 +357,7 @@ class TestGetNoteTool:
         ]
 
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = GetNoteTool()
@@ -378,7 +378,7 @@ class TestGetNoteTool:
         )
 
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = GetNoteTool()
@@ -397,7 +397,7 @@ class TestGetNoteTool:
         )
 
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = GetNoteTool()
@@ -423,7 +423,7 @@ class TestGetNoteTool:
         )
 
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = GetNoteTool()
@@ -452,7 +452,7 @@ class TestGetNoteTool:
         )
 
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = GetNoteTool()
@@ -481,7 +481,7 @@ class TestGetNoteTool:
         )
 
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = GetNoteTool()
@@ -502,7 +502,7 @@ class TestGetNoteTool:
         )
 
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = GetNoteTool()
@@ -543,7 +543,7 @@ class TestListPatientNotesTool:
         )
 
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = ListPatientNotesTool()
@@ -572,7 +572,7 @@ class TestListPatientNotesTool:
         )
 
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = ListPatientNotesTool()
@@ -600,7 +600,7 @@ class TestListPatientNotesTool:
         )
 
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = ListPatientNotesTool()
@@ -612,7 +612,7 @@ class TestListPatientNotesTool:
     def test_invoke_invalid_note_type_raises(self, notes_dataset, mock_backend):
         """Test that an invalid note_type raises QueryError."""
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = ListPatientNotesTool()
@@ -638,7 +638,7 @@ class TestListPatientNotesTool:
         )
 
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = ListPatientNotesTool()
@@ -668,7 +668,7 @@ class TestListPatientNotesTool:
         ]
 
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = ListPatientNotesTool()
@@ -695,7 +695,7 @@ class TestListPatientNotesTool:
         )
 
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = ListPatientNotesTool()
@@ -727,7 +727,7 @@ class TestListPatientNotesTool:
         )
 
         with patch(
-            "m4.core.tools.notes.get_backend",
+            "oasis.core.tools.notes.get_backend",
             return_value=mock_backend,
         ):
             tool = ListPatientNotesTool()

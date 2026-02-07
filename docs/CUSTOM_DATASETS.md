@@ -1,12 +1,12 @@
 # Adding Custom Datasets
 
-M4 supports custom datasets loaded from CSV files. This guide shows how to add your own.
+OASIS supports custom datasets loaded from CSV files. This guide shows how to add your own.
 
 ## Quick Start: JSON Definition
 
-Create a JSON file in `m4_data/datasets/`:
+Create a JSON file in `oasis_data/datasets/`:
 
-**Example: `m4_data/datasets/vf-ghana.json`**
+**Example: `oasis_data/datasets/vf-ghana.json`**
 ```json
 {
   "name": "vf-ghana",
@@ -19,14 +19,14 @@ Create a JSON file in `m4_data/datasets/`:
 
 Then initialize:
 ```bash
-m4 init vf-ghana --src /path/to/your/csv/files
+oasis init vf-ghana --src /path/to/your/csv/files
 ```
 
 ## JSON Fields Reference
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `name` | Yes | Unique identifier (used in `m4 use <name>`) |
+| `name` | Yes | Unique identifier (used in `oasis use <name>`) |
 | `description` | Yes | Human-readable description |
 | `primary_verification_table` | Yes | Table to verify initialization succeeded |
 | `modalities` | No | Data types in this dataset (see below). Defaults to `["TABULAR"]` |
@@ -42,7 +42,7 @@ Tools are filtered based on the dataset's declared modalities. If not specified,
 
 ### Schema Mapping (Canonical Table Names)
 
-M4 uses canonical `schema.table` names (e.g., `vf.facilities`) that work with the DuckDB backend. The `schema_mapping` field controls how these canonical names are constructed.
+OASIS uses canonical `schema.table` names (e.g., `vf.facilities`) that work with the DuckDB backend. The `schema_mapping` field controls how these canonical names are constructed.
 
 **`schema_mapping`** maps filesystem subdirectories to canonical schema names. When DuckDB creates views, files from each subdirectory are placed into the corresponding schema:
 
@@ -71,7 +71,7 @@ Custom datasets without `schema_mapping` still work — tables will be created w
 
 ## Initialization Process
 
-When you run `m4 init <dataset> --src /path/to/csvs`:
+When you run `oasis init <dataset> --src /path/to/csvs`:
 
 1. **Convert** CSV files to Parquet format
 2. **Create** DuckDB views over the Parquet files
@@ -80,10 +80,10 @@ When you run `m4 init <dataset> --src /path/to/csvs`:
 
 ## Directory Structure
 
-M4 organizes data like this:
+OASIS organizes data like this:
 
 ```
-m4_data/
+oasis_data/
 ├── datasets/           # Custom JSON definitions
 │   └── vf-ghana.json
 ├── parquet/            # Converted Parquet files
@@ -98,7 +98,7 @@ m4_data/
 For more control, register datasets in Python:
 
 ```python
-from m4.core.datasets import DatasetDefinition, DatasetRegistry, Modality
+from oasis.core.datasets import DatasetDefinition, DatasetRegistry, Modality
 
 my_dataset = DatasetDefinition(
     name="vf-ghana",
@@ -114,5 +114,5 @@ DatasetRegistry.register(my_dataset)
 ## Tips
 
 - **Check table names:** Use `get_database_schema` tool to see available tables
-- **Verify initialization:** `m4 status` shows if Parquet and DuckDB are ready
-- **Force reinitialize:** `m4 init <dataset> --force` recreates the database
+- **Verify initialization:** `oasis status` shows if Parquet and DuckDB are ready
+- **Force reinitialize:** `oasis init <dataset> --force` recreates the database

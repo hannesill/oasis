@@ -4,9 +4,9 @@ from unittest import mock
 import duckdb
 import requests
 
-from m4.core.backends.duckdb import DuckDBBackend
-from m4.core.datasets import DatasetDefinition, Modality
-from m4.data_io import (
+from oasis.core.backends.duckdb import DuckDBBackend
+from oasis.core.datasets import DatasetDefinition, Modality
+from oasis.data_io import (
     COMMON_USER_AGENT,
     _create_duckdb_with_views,
     _scrape_urls_from_html_page,
@@ -133,7 +133,7 @@ def test_convert_csv_to_parquet_and_init_duckdb(tmp_path, monkeypatch):
     # mimic-iv-demo has schema_mapping {"hosp": "mimiciv_hosp", "icu": "mimiciv_icu"},
     # so views are schema-qualified: mimiciv_hosp.sample
     db_path = tmp_path / "test.duckdb"
-    with mock.patch("m4.data_io.get_dataset_parquet_root", return_value=dst_root):
+    with mock.patch("oasis.data_io.get_dataset_parquet_root", return_value=dst_root):
         init_ok = init_duckdb_from_parquet("mimic-iv-demo", db_path)
     assert init_ok  # views created
 
@@ -248,7 +248,7 @@ def test_schema_mapping_flat_files_single_schema_fallback(tmp_path):
 
 def test_mimiciv_derived_schema_not_created_during_init(tmp_path):
     """The mimiciv_derived schema should NOT be created during normal init.
-    It is created by m4 init-derived (materializer.py) when needed."""
+    It is created by oasis init-derived (materializer.py) when needed."""
     parquet_root = tmp_path / "parquet"
     _create_parquet(
         parquet_root / "hosp", "admissions", "subject_id,hadm_id\n1,100\n2,200\n"

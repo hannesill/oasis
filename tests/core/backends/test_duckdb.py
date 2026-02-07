@@ -1,4 +1,4 @@
-"""Tests for m4.core.backends.duckdb module.
+"""Tests for oasis.core.backends.duckdb module.
 
 Tests cover:
 - DuckDBBackend initialization
@@ -15,9 +15,9 @@ from unittest.mock import patch
 
 import pytest
 
-from m4.core.backends.base import ConnectionError, TableNotFoundError
-from m4.core.backends.duckdb import DuckDBBackend
-from m4.core.datasets import DatasetDefinition, Modality
+from oasis.core.backends.base import ConnectionError, TableNotFoundError
+from oasis.core.backends.duckdb import DuckDBBackend
+from oasis.core.datasets import DatasetDefinition, Modality
 
 
 @pytest.fixture
@@ -90,8 +90,8 @@ class TestDuckDBPathResolution:
         assert path == temp_db
 
     def test_env_var_takes_second_priority(self, test_dataset, temp_db):
-        """Test that M4_DB_PATH env var takes second priority."""
-        with patch.dict(os.environ, {"M4_DB_PATH": str(temp_db)}):
+        """Test that OASIS_DB_PATH env var takes second priority."""
+        with patch.dict(os.environ, {"OASIS_DB_PATH": str(temp_db)}):
             backend = DuckDBBackend()  # No override
             path = backend._get_db_path(test_dataset)
 
@@ -100,13 +100,13 @@ class TestDuckDBPathResolution:
     def test_dataset_config_used_as_fallback(self, test_dataset):
         """Test that dataset config is used when no override."""
         with patch.dict(os.environ, {}, clear=True):
-            # Remove M4_DB_PATH if set
-            env_backup = os.environ.pop("M4_DB_PATH", None)
+            # Remove OASIS_DB_PATH if set
+            env_backup = os.environ.pop("OASIS_DB_PATH", None)
             try:
                 backend = DuckDBBackend()
 
                 with patch(
-                    "m4.core.backends.duckdb.get_default_database_path"
+                    "oasis.core.backends.duckdb.get_default_database_path"
                 ) as mock_get_path:
                     mock_get_path.return_value = Path("/mock/path/test.duckdb")
                     path = backend._get_db_path(test_dataset)
@@ -115,7 +115,7 @@ class TestDuckDBPathResolution:
                     mock_get_path.assert_called_once_with(test_dataset.name)
             finally:
                 if env_backup:
-                    os.environ["M4_DB_PATH"] = env_backup
+                    os.environ["OASIS_DB_PATH"] = env_backup
 
 
 class TestDuckDBQueryExecution:
@@ -235,7 +235,7 @@ class TestDuckDBBackendInfo:
         backend = DuckDBBackend()
 
         with patch(
-            "m4.core.backends.duckdb.get_default_database_path"
+            "oasis.core.backends.duckdb.get_default_database_path"
         ) as mock_get_path:
             mock_get_path.return_value = None
 

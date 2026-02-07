@@ -6,16 +6,16 @@ config system and is properly reflected in the backends.
 
 import pytest
 
-import m4.config as config_mod
-from m4.config import get_active_dataset, set_active_dataset
-from m4.core.datasets import DatasetRegistry
-from m4.core.exceptions import DatasetError
+import oasis.config as config_mod
+from oasis.config import get_active_dataset, set_active_dataset
+from oasis.core.datasets import DatasetRegistry
+from oasis.core.exceptions import DatasetError
 
 
 def test_dynamic_dataset_switching(tmp_path, monkeypatch):
     """Test that dataset switching works correctly."""
     # Setup mock data dir
-    data_dir = tmp_path / "m4_data"
+    data_dir = tmp_path / "oasis_data"
     data_dir.mkdir()
 
     # Patch config module to use our temp data dir
@@ -31,8 +31,8 @@ def test_dynamic_dataset_switching(tmp_path, monkeypatch):
     (data_dir / "datasets").mkdir()
 
     # 1. Start with no active dataset
-    monkeypatch.setenv("M4_BACKEND", "duckdb")
-    monkeypatch.delenv("M4_DB_PATH", raising=False)
+    monkeypatch.setenv("OASIS_BACKEND", "duckdb")
+    monkeypatch.delenv("OASIS_DB_PATH", raising=False)
 
     # Ensure config is empty/default
     if (data_dir / "config.json").exists():
@@ -42,7 +42,7 @@ def test_dynamic_dataset_switching(tmp_path, monkeypatch):
     with pytest.raises(DatasetError):
         DatasetRegistry.get_active()
 
-    # 2. Set active dataset to something else (simulating 'm4 use')
+    # 2. Set active dataset to something else (simulating 'oasis use')
     set_active_dataset("mimic-iv")
 
     # Verify config file was written
