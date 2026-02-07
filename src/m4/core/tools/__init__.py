@@ -1,0 +1,106 @@
+"""M4 Core Tools - Tool protocol and registry.
+
+This package provides the tool abstraction layer for M4:
+- Tool protocol: Interface for all M4 tools
+- ToolInput/ToolOutput: Base classes for tool parameters
+- ToolRegistry: Registry for managing tools
+- ToolSelector: Intelligent tool filtering based on capabilities
+- init_tools(): Initialize and register all available tools
+"""
+
+import threading
+
+from m4.core.tools.base import Tool, ToolInput, ToolOutput
+from m4.core.tools.management import (
+    ListDatasetsTool,
+    SetDatasetTool,
+)
+from m4.core.tools.notes import (
+    GetNoteTool,
+    ListPatientNotesTool,
+    SearchNotesTool,
+)
+from m4.core.tools.registry import CompatibilityResult, ToolRegistry, ToolSelector
+
+# Import tool classes for registration
+from m4.core.tools.tabular import (
+    ExecuteQueryTool,
+    GetDatabaseSchemaTool,
+    GetTableInfoTool,
+)
+
+# Track initialization state with thread safety
+_tools_lock = threading.Lock()
+_tools_initialized = False
+
+
+def init_tools() -> None:
+    """Initialize and register all available tools.
+
+    This function registers all tool classes with the ToolRegistry.
+    It is idempotent and thread-safe - calling it multiple times or
+    from multiple threads has no additional effect.
+
+    This should be called during application startup, before the MCP
+    server begins accepting requests.
+
+    Example:
+        from m4.core.tools import init_tools
+        init_tools()  # Register all tools
+    """
+    global _tools_initialized
+
+    with _tools_lock:
+        # Check if already initialized AND tools are registered
+        # (handles case where registry was reset but flag is still True)
+        if _tools_initialized and ToolRegistry.list_all():
+            return
+
+        # Register management tools (always available)
+        ToolRegistry.register(ListDatasetsTool())
+        ToolRegistry.register(SetDatasetTool())
+
+        # Register tabular data tools
+        ToolRegistry.register(GetDatabaseSchemaTool())
+        ToolRegistry.register(GetTableInfoTool())
+        ToolRegistry.register(ExecuteQueryTool())
+
+        # Register clinical notes tools
+        ToolRegistry.register(SearchNotesTool())
+        ToolRegistry.register(GetNoteTool())
+        ToolRegistry.register(ListPatientNotesTool())
+
+        _tools_initialized = True
+
+
+def reset_tools() -> None:
+    """Reset the tool registry and initialization state.
+
+    This is primarily useful for testing to ensure a clean state
+    between test runs. Thread-safe.
+    """
+    global _tools_initialized
+
+    with _tools_lock:
+        ToolRegistry.reset()
+        _tools_initialized = False
+
+
+__all__ = [
+    "CompatibilityResult",
+    "ExecuteQueryTool",
+    "GetDatabaseSchemaTool",
+    "GetNoteTool",
+    "GetTableInfoTool",
+    "ListDatasetsTool",
+    "ListPatientNotesTool",
+    "SearchNotesTool",
+    "SetDatasetTool",
+    "Tool",
+    "ToolInput",
+    "ToolOutput",
+    "ToolRegistry",
+    "ToolSelector",
+    "init_tools",
+    "reset_tools",
+]
