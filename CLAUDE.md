@@ -266,4 +266,6 @@ M4 has been stripped to its core infrastructure for OASIS. What remains:
 | Skills infrastructure | `src/m4/skills/installer.py`, `SKILL_FORMAT.md` |
 | Custom dataset guide | `docs/CUSTOM_DATASETS.md` |
 | M4 Apps guide | `docs/M4_APPS.md` |
-| Architecture docs | `docs/ARCHITECTURE.md` |
+| Tool reference | `docs/TOOLS.md` |
+| Dev guide (adding tools) | `docs/DEVELOPMENT.md` |
+| Skills guide | `docs/SKILLS.md` |

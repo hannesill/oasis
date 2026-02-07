@@ -137,6 +137,10 @@ def dataset_init_cmd(
     """
     logger.info(f"CLI 'init' called for dataset: '{dataset_name}'")
 
+    from m4.config import _ensure_custom_datasets_loaded
+
+    _ensure_custom_datasets_loaded()
+
     dataset_key = dataset_name.lower()
     ds = DatasetRegistry.get(dataset_key)
     if not ds:
