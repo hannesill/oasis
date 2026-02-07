@@ -495,6 +495,14 @@ def list_patient_notes(
         return f"**Error:** {e}"
 
 
+# ------------------------------------------
+# Databricks integration (Genie, RAG, MLflow)
+# ------------------------------------------
+from m4.databricks import register_databricks_tools
+
+register_databricks_tools(mcp)
+
+
 def main():
     """Main entry point for MCP server."""
     mcp.run()
