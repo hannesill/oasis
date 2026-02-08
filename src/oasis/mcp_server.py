@@ -556,6 +556,9 @@ def geo_map(
     condition: str | None = None,
     radius_km: float = 50.0,
     mode: str = "search",
+    highlight_region: str | None = None,
+    narrative_focus: str | None = None,
+    initial_zoom: float = 6.0,
 ) -> str:
     """🗺️ Launch interactive healthcare map. Opens a visual map inside Claude.
 
@@ -566,6 +569,9 @@ def geo_map(
         condition: Medical condition or specialty to highlight.
         radius_km: Search radius in kilometers (default: 50).
         mode: "search" for facility search, "deserts" for coverage gaps.
+        highlight_region: Region to fly to and highlight (e.g. "Northern").
+        narrative_focus: Controls the demo narrative — "deserts", "anomaly", or "impact".
+        initial_zoom: Initial camera zoom level (default: 6.0).
 
     Returns:
         Map data with facility locations and summary.
@@ -585,6 +591,9 @@ def geo_map(
                 condition=condition,
                 radius_km=radius_km,
                 mode=mode,
+                highlight_region=highlight_region,
+                narrative_focus=narrative_focus,
+                initial_zoom=initial_zoom,
             ),
         )
 

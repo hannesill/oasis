@@ -42,6 +42,41 @@ let current3DModel: string | null = null;
 let audioElement: HTMLAudioElement | null = null;
 let allSpecialties: string[] = [];
 
+// Tool result data — stored by ontoolresult, consumed after map loads
+let pendingToolData: any = null;
+
+// Ghana region center coordinates [lng, lat] for camera targeting
+const REGION_COORDS: Record<string, [number, number]> = {
+  'northern': [-0.9057, 9.5439],
+  'upper east': [-0.8500, 10.7500],
+  'upper west': [-2.1500, 10.2500],
+  'greater accra': [-0.1870, 5.6037],
+  'ashanti': [-1.5209, 6.7470],
+  'western': [-2.1500, 5.3960],
+  'eastern': [-0.4500, 6.3300],
+  'central': [-1.2000, 5.4600],
+  'volta': [0.5000, 6.8000],
+  'brong-ahafo': [-1.5000, 7.5000],
+  'bono': [-2.3000, 7.5000],
+  'bono east': [-1.0500, 7.7500],
+  'ahafo': [-2.3500, 7.0000],
+  'savannah': [-1.8000, 9.0000],
+  'north east': [-0.3500, 10.5000],
+  'oti': [0.3000, 7.8000],
+  'western north': [-2.3000, 6.3000],
+  // Major cities as fallback
+  'accra': [-0.1870, 5.6037],
+  'kumasi': [-1.6244, 6.6885],
+  'tamale': [-0.8393, 9.4008],
+  'bolgatanga': [-0.8514, 10.7856],
+  'wa': [-2.5099, 10.0601],
+  'cape coast': [-1.2466, 5.1036],
+  'ho': [0.4667, 6.6000],
+  'sunyani': [-2.3266, 7.3349],
+  'koforidua': [-0.2558, 6.0940],
+  'takoradi': [-1.7554, 4.8986],
+};
+
 // ═══════════════════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════════════════
@@ -121,11 +156,24 @@ function initMap(): void {
     addMapLayers();
     populateConditionDropdown();
 
+    // Determine intro camera target — tool data can override the default
+    const toolTarget = resolveToolCameraTarget();
+
     // Intro animation
     setTimeout(() => {
       $('loader').classList.add('gone');
-      map.flyTo({ center: [-1.0232, 7.9465], zoom: 6.5, pitch: 50, bearing: -15, duration: 4000, essential: true });
+      if (toolTarget) {
+        // Model-driven fly-to (highlight_region or search center)
+        map.flyTo({ center: toolTarget.center, zoom: toolTarget.zoom, pitch: toolTarget.pitch, bearing: -15, duration: 4000, essential: true });
+      } else {
+        // Default: fly to Ghana overview
+        map.flyTo({ center: [-1.0232, 7.9465], zoom: 6.5, pitch: 50, bearing: -15, duration: 4000, essential: true });
+      }
     }, 2200);
+
+    // Apply tool data (deserts, search results, narrative focus) after a short delay
+    // so the fly-to animation has started
+    setTimeout(() => { applyToolData(); }, 2800);
   });
 
   // Timeout fallback — don't leave user stuck on loader forever
@@ -748,6 +796,98 @@ function applyHostContext(ctx: McpUiHostContext): void {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// MODEL → UI DATA FLOW — render tool results directly
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Resolve camera target from pending tool data.
+ * Called before the intro fly-to to override the default Ghana overview.
+ */
+function resolveToolCameraTarget(): { center: [number, number]; zoom: number; pitch: number } | null {
+  if (!pendingToolData) return null;
+
+  const data = pendingToolData;
+  const initialZoom = data.initial_zoom || 6.0;
+
+  // Priority 1: explicit highlight_region
+  if (data.highlight_region) {
+    const regionKey = data.highlight_region.toLowerCase();
+    const coords = REGION_COORDS[regionKey];
+    if (coords) {
+      return { center: coords, zoom: initialZoom, pitch: 45 };
+    }
+  }
+
+  // Priority 2: search mode with center
+  if (data.mode === 'search' && data.center?.lat && data.center?.lng) {
+    return { center: [data.center.lng, data.center.lat], zoom: Math.max(initialZoom, 8), pitch: 45 };
+  }
+
+  // Priority 3: deserts mode — fit to gaps handled by renderDesertGaps
+  // but if we have a custom zoom, at least go to Ghana center at that zoom
+  if (data.mode === 'deserts' && initialZoom !== 6.0) {
+    return { center: [-1.0232, 7.9465], zoom: initialZoom, pitch: 45 };
+  }
+
+  return null;
+}
+
+/**
+ * Apply pending tool data to the map.
+ * Renders deserts/search results from the tool result directly,
+ * so the UI doesn't need a separate user interaction.
+ */
+function applyToolData(): void {
+  if (!pendingToolData) return;
+
+  const data = pendingToolData;
+  pendingToolData = null;
+
+  // -- Desert mode: render gap circles directly --
+  if (data.mode === 'deserts' && data.gaps?.length > 0) {
+    renderDesertGaps(data.gaps);
+    layerState.deserts = true;
+    $('tog-deserts').classList.add('on');
+
+    // Turn on heatmap for visual density context
+    if (!layerState.heatmap) toggleLayer('heatmap');
+
+    showApiStatus(`${data.gap_count || data.gaps.length} coverage gaps for ${data.query?.condition || 'specialty'}`, true);
+  }
+
+  // -- Search mode: render facility results directly --
+  if (data.mode === 'search' && data.facilities?.length > 0) {
+    const results = data.facilities.map((f: any) => ({
+      coords: [f.lng, f.lat],
+      distance: f.distance_km,
+      name: f.name,
+      city: f.city,
+      region: f.region,
+      facility_type: f.facility_type,
+      specialties: f.specialties,
+      equipment: f.equipment,
+      capability: f.capability,
+    }));
+
+    searchResultsCache = results;
+    renderResults(results, data.query?.condition || '', data.total_found || results.length);
+    replaceMapWithResults(results);
+    highlightResults(results);
+
+    if (data.center?.lat && data.center?.lng) {
+      drawRadius([data.center.lng, data.center.lat], data.query?.radius_km || 50);
+    }
+
+    showApiStatus(`${data.total_found || results.length} facilities loaded from model`, true);
+  }
+
+  // -- Narrative focus overlays --
+  if (data.narrative_focus === 'deserts' && !layerState.heatmap) {
+    toggleLayer('heatmap');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // MCP APP LIFECYCLE
 // ═══════════════════════════════════════════════════════════════
 
@@ -770,7 +910,8 @@ app.ontoolresult = (result: any) => {
         ELEVENLABS_API_KEY = data.config.elevenlabs_api_key || '';
       }
 
-      // Facilities loaded separately via loadFacilitiesViaMCP (bypasses 1MB tool result limit)
+      // Store full tool data — applied after map + facilities load
+      pendingToolData = data;
     }
   } catch (err) {
     console.error('Failed to parse geo_map tool result:', err);

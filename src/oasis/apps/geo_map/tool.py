@@ -32,6 +32,11 @@ class GeoMapInput(ToolInput):
     radius_km: float = 50.0
     mode: str = "search"  # "search" or "deserts"
 
+    # Demo control — model passes these to drive the map narrative
+    highlight_region: str | None = None  # e.g. "Northern" — fly to + dim others
+    narrative_focus: str | None = None  # "deserts" | "anomaly" | "impact"
+    initial_zoom: float = 6.0
+
 
 class GeoMapTool:
     """Interactive map of healthcare facilities and medical deserts in Ghana.
@@ -69,6 +74,13 @@ class GeoMapTool:
     ) -> dict[str, Any]:
         """Execute geospatial query and return results for both Claude and the webview."""
 
+        # Demo control fields passed through to UI
+        ui_control = {
+            "highlight_region": params.highlight_region,
+            "narrative_focus": params.narrative_focus,
+            "initial_zoom": params.initial_zoom,
+        }
+
         if params.mode == "deserts" and params.condition:
             tool = FindCoverageGapsTool()
             result = tool.invoke(
@@ -88,6 +100,7 @@ class GeoMapTool:
                 "gap_count": result.get("gap_count", 0),
                 "total_facilities": result.get("total_facilities_found", 0),
                 "gaps": result.get("gaps", []),
+                **ui_control,
             }
         else:
             tool = FindFacilitiesInRadiusTool()
@@ -111,6 +124,7 @@ class GeoMapTool:
                 "total_found": result.get("total_found", 0),
                 "center": result.get("center", {}),
                 "facilities": result.get("facilities", [])[:10],
+                **ui_control,
             }
 
     def is_compatible(self, dataset: DatasetDefinition) -> bool:
