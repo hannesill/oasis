@@ -1,194 +1,175 @@
-# Medical Desert Mapper — Enhancement Plan
+# Medical Desert Mapper — 45-Second Demo Plan
 
 ## Foundation (Already Built)
 
-The `geo_map` MCP App (`src/oasis/apps/geo_map/`) is working end-to-end:
-- Python FastMCP server with `_meta.ui.resourceUri` injection
-- Mapbox GL JS with dark globe, 3D terrain, space fog, star field
-- Facility markers + heatmap + 3D building layers with toggles
-- Runtime geocoding via `GHANA_CITY_COORDS` lookup + deterministic jitter
-- Search by condition + location + radius (calls `find_facilities_in_radius` via MCP)
-- Coverage gap visualization (calls `find_coverage_gaps` via MCP)
-- 3D hospital model (three.js) on facility click
+The `geo_map` MCP App (`src/oasis/apps/geo_map/`) is working:
+- Mapbox GL JS with dark globe
+- Facility markers + heatmap layers
+- Runtime geocoding via `GHANA_CITY_COORDS`
+- Coverage gap visualization (calls `find_coverage_gaps`)
 - Detail card with specialties, equipment, distance
-- `updateModelContext` keeping Claude aware of user's map state
-- ElevenLabs TTS narration (auto-plays on click — needs toggle)
 
-**What's missing for the demo:**
-1. H3 hex grid — the signature "medical desert" visual
-2. Specialty + Region filter dropdowns
-3. Patient routing overlay on map
-4. Fullscreen support
-5. ElevenLabs is auto-play (should be opt-in)
-
----
-
-## Phase 1: H3 Hex Grid + 3D Extrusion
-
-**Goal:** Add the H3 hexagonal grid layer with inverse-density coloring and 3D extrusion. This is the signature visual — extruded green hexes where facilities cluster, flat red hexes where deserts stretch. Replaces the heatmap as the primary overview layer.
-
-**What to build:**
-
-1. **Add `h3-js` dependency** to `src/oasis/apps/geo_map/ui/package.json`
-
-2. **Hex grid computation** in `mcp-app.ts` (or a new `hex-grid.ts` imported by it):
-   - `computeHexGrid(geojson, resolution)`:
-     - Convert each facility's lat/lng to H3 index at resolution 4 (~22km edge length, good for Ghana scale)
-     - Aggregate: count facilities per hex
-     - Return GeoJSON `FeatureCollection` of hex polygons with `count` property
-   - `addHexLayer(map, hexGeoJSON)`:
-     - Add as `fill-extrusion` layer:
-       - `fill-extrusion-height`: interpolate from count (0 → 0m, max → 50000m)
-       - `fill-extrusion-color`: low (0-1) = red `#ef4444`, medium (2-5) = amber `#f59e0b`, high (5+) = green `#22c55e`
-       - `fill-extrusion-opacity`: 0.7
-     - Use `h3.cellToBoundary()` to get hex polygon coordinates
-   - `updateHexLayer(map, hexGeoJSON)`: update source data (for filter changes)
-   - `removeHexLayer(map)`: clean removal
-
-3. **LOD transitions** in `mcp-app.ts`:
-   - Zoom ≤ 8: show hex layer, hide markers
-   - Zoom > 8: hide hex layer, show markers
-   - Smooth opacity transition over zoom range 7.5–8.5 using Mapbox `interpolate` expressions
-   - Keep heatmap as an optional toggle (off by default now, hex grid replaces it as primary)
-
-4. **Add hex grid toggle** to existing layer toggle buttons:
-   - New toggle `tog-hexgrid` (on by default)
-   - Heatmap toggle becomes off by default
-
-**How to verify:**
-- Open map zoomed out (zoom ~6): see hexagonal grid covering Ghana
-- Red hexes visible in Northern/Upper regions (few facilities)
-- Green extruded hexes in Accra, Kumasi area (dense)
-- Zoom in past level 8: hexes fade out, individual markers fade in
-- Rotate camera: 3D hex extrusions visible against terrain
-- Toggle hex grid off → clean removal
-
-**Key references:**
-- h3-js: `latLngToCell(lat, lng, resolution)`, `cellToBoundary(h3Index)`
-- Mapbox fill-extrusion layer: https://docs.mapbox.com/mapbox-gl-js/style-spec/layers/#fill-extrusion
-
----
-
-## Phase 2: Specialty + Region Filters
-
-**Goal:** Add dropdown filters that update markers, hex grid, and search results in real-time. Enables the demo flow: "Show me surgical deserts in Northern Ghana" → filters pre-set, camera flies to region.
-
-**What to build:**
-
-1. **Two dropdown `<select>` elements** in the existing UI (HTML in `mcp-app.html`):
-   - Specialty dropdown: populated from `allSpecialties` (already extracted in `loadFacilitiesViaMCP`)
-   - Region dropdown: populated from unique `address_stateOrRegion` values
-   - Position: integrate into existing control panel (glass card style)
-   - Default: "All" for both
-
-2. **Filter logic** in `mcp-app.ts`:
-   - On specialty change: filter the `facilities` GeoJSON source using `map.setFilter()`
-   - On region change:
-     - Filter GeoJSON source
-     - Fly camera to region bounds (use `GHANA_CITY_COORDS` region centroids already in geospatial.py — pass via tool result or hardcode client-side)
-   - **Recompute hex grid** from filtered subset (call `computeHexGrid` with filtered features)
-   - Update hex layer source data
-
-3. **`ontoolinput` integration**: if Claude passes `condition` or `region` in `geo_map` tool args, pre-set the dropdown filters on load and trigger the filter logic
-
-**How to verify:**
-- Select "surgery" → only surgery facilities visible, hex grid updates to show surgery deserts
-- Select "Northern" → camera flies to Northern Ghana, only Northern facilities shown
-- Combine both → intersection filter
-- Reset to "All" → full dataset restored
-- Claude launches map with `{ condition: "surgery", location: "Northern" }` → filters pre-set
-
----
-
-## Phase 3: Patient Routing Overlay
-
-**Goal:** Show real road routes on the map. Supports demo step 3: "Route a patient in Bolgatanga to emergency appendectomy."
-
-**What to build:**
-
-1. **Routing function** in `mcp-app.ts` (or new `routing.ts`):
-   - `fetchRoute(origin: [lng, lat], destination: [lng, lat])`:
-     - Call Mapbox Directions API: `https://api.mapbox.com/directions/v5/mapbox/driving/{origin};{destination}?geometries=geojson&access_token={token}`
-     - Parse response: route geometry (GeoJSON LineString), duration, distance
-   - `addRouteLayer(map, routeGeometry)`:
-     - Line color: `#3b82f6` (blue), width 4, dashed pattern
-   - `addRouteInfo(duration, distance)`:
-     - Overlay card: "2hr 30min — 150km"
-   - `removeRoute(map)`: clean up route layer + info overlay
-
-2. **"Route to this facility" button** in the detail card:
-   - Add button to existing `detail-card` HTML
-   - On click: show instruction toast "Click the map to set patient location"
-   - On next map click: use that point as origin, facility as destination
-   - Call `fetchRoute`, render route line + info card
-   - Fly camera to show full route bounds
-
-3. **`updateModelContext` with route info**:
-   - After route displayed: "Route: Bolgatanga → Tamale Teaching Hospital. 150km, ~2.5hr drive."
-
-**How to verify:**
-- Click facility → detail card → "Route to this facility"
-- Click somewhere on map as patient origin
-- Blue dashed route line appears following real roads
-- Info card shows distance and duration
-- Camera adjusts to show full route
-
-**Note:** Mapbox Directions API uses the same `MAPBOX_TOKEN`. The request is made client-side from the iframe — verify CSP allows `api.mapbox.com` (it should, since map tiles already load from there).
-
----
-
-## Phase 4: Polish
-
-**Goal:** Small improvements that elevate the demo experience.
-
-**What to build:**
-
-1. **Fullscreen support**:
-   - Add fullscreen toggle button (top-right, next to nav controls)
-   - Call `app.requestDisplayMode({ mode: "fullscreen" })` on click
-   - Handle `onhostcontextchanged` for display mode transitions
-   - Keyboard: `F` to toggle fullscreen
-
-2. **ElevenLabs narration toggle**:
-   - Add a small speaker icon toggle to the detail card (muted by default)
-   - Only call `narrateFacility()` when toggle is on
-   - Remove auto-play behavior from `showDetail()`
-
-3. **Hex grid legend**:
-   - Small legend card (bottom-left) when hex layer is visible
-   - Red = 0-1 facilities, Amber = 2-5, Green = 5+
-   - Shows what the extrusion height and colors mean
-
-**How to verify:**
-- Fullscreen button works in Claude Desktop
-- Narration only plays when speaker icon is toggled on
-- Legend appears/disappears with hex grid toggle
-
----
-
-## Environment Variables
-
-| Variable | Purpose | Where |
-|----------|---------|-------|
-| `MAPBOX_TOKEN` | Mapbox GL JS + Directions API | Read by `mcp_server.py`, passed to UI via `ontoolresult` config |
-| `ELEVENLABS_API_KEY` | TTS narration (optional) | Read by `mcp_server.py`, passed to UI via `ontoolresult` config |
-
----
-
-## Data Flow (Current)
+## 45-Second Demo Flow
 
 ```
-vf-ghana.csv
-    │
-    └── oasis init ──→ Parquet ──→ DuckDB
-                                     │
-                    geo_map tool ─────┘
-                         │
-                         ├── ontoolresult → config (tokens)
-                         │
-                         └── UI calls MCP tools at runtime:
-                              │
-                              ├── geocode_facilities → GeoJSON → markers + hex grid
-                              ├── find_facilities_in_radius → search results
-                              └── find_coverage_gaps → desert circles
+0:00 - 0:10  "Where are surgical deserts in Northern Ghana?"
+             → Hex grid appears, red zones pulse, camera flies to Northern region
+
+0:10 - 0:20  Click worst gap → "150km to nearest surgeon"
+             Click anomalous facility → "Claims 50 surgeries/month, only 2 staff"
+
+0:20 - 0:35  "Where should we place one new surgeon?"
+             → Impact heatmap overlay, click optimal zone
+             → "Would serve 50,000 people currently without access"
+
+0:35 - 0:45  Zoom out → Full Ghana hex grid
+             "Every red zone is a patient waiting"
+```
+
+## What's Missing (Priority Order)
+
+**Must Build:**
+1. ⭐ **Model → UI data passing** — Eliminate duplicate queries, enable model control
+2. ⭐ **H3 hex grid** — THE signature visual (red = deserts, green = coverage)
+3. ⭐ **Anomaly highlighting** — Warning badges on problematic facilities
+4. ⭐ **Impact heatmap** — Shows where new facilities help most
+
+**Cut from scope:**
+- ❌ Interactive filters (model controls everything, no user interaction in 45 sec)
+- ❌ Patient routing (doesn't score high enough for time cost)
+- ❌ 3D buildings, ElevenLabs narration (distractions)
+- ❌ Fullscreen, polish (no time)
+- ❌ Bidirectional commands (too complex)
+
+---
+
+## Phase 1: Model → UI Data Flow ⭐ 4 hours
+
+**Goal:** Model passes query results directly to UI. No duplicate queries. Enables model to control the demo narrative.
+
+**Build:**
+
+1. **Enhanced `GeoMapInput`** in `tool.py`:
+   ```python
+   @dataclass
+   class GeoMapInput(ToolInput):
+       location: str = "Accra"
+       condition: str | None = None
+       mode: str = "search"  # "search" or "deserts"
+
+       # Demo control
+       highlight_region: str | None = None  # "Northern" - fly to + dim others
+       narrative_focus: str | None = None   # "deserts" | "anomaly" | "impact"
+       initial_zoom: float = 6.0
+   ```
+
+2. **Pass data via `ontoolresult`** in `mcp-app.ts`:
+   - Tool result includes facilities/gaps array
+   - UI receives it, renders immediately
+   - Skip duplicate `geocode_facilities` call
+   - Apply camera position + region highlighting
+
+**Verify:** Model calls `geo_map(mode="deserts", condition="surgery", highlight_region="Northern", initial_zoom=7)` → Map flies to Northern region, shows surgery gaps, no duplicate query
+
+---
+
+## Phase 2: H3 Hex Grid ⭐ 3 hours
+
+**Goal:** THE signature visual. Red hexes = medical deserts, green = coverage. 3D extrusion by density.
+
+**Build:**
+
+1. **Add `h3-js`** to `package.json`
+
+2. **Hex grid** in `mcp-app.ts`:
+   - `computeHexGrid(facilities, resolution=4)` → count per hex
+   - `addHexLayer(map, hexGeoJSON)`:
+     - `fill-extrusion` layer
+     - Color: 0-1 facilities = red `#ef4444`, 2-5 = amber, 5+ = green `#22c55e`
+     - Height: 0 → 0m, max → 40000m
+   - Auto-show at zoom ≤ 8 (hide markers)
+   - Auto-hide at zoom > 8 (show markers)
+
+3. **Pulse animation** on red hexes (deserts):
+   - Subtle opacity pulse: 0.5 → 0.8 → 0.5 (2 sec cycle)
+   - Only on hexes with count = 0
+
+**Verify:** `geo_map(mode="deserts", condition="surgery")` → Red hexes pulse in Northern Ghana, green extrusions in Accra
+
+---
+
+## Phase 3: Anomaly + Impact Overlay ⭐ 5 hours
+
+**Goal:** Demo beats #2 ("Does this facility really do surgery?") and #4 ("Where to place a surgeon?"). Show data inconsistencies and optimal resource placement.
+
+**Build:**
+
+1. **Anomaly detection**:
+   - Call `detect_anomalies` MCP tool on map load
+   - Store anomaly list
+   - On facility click: check if anomalous
+   - If yes:
+     - ⚠️ badge on marker
+     - Red pulse outline on card
+     - Anomaly section in detail card:
+       - "Claims 50 surgeries/month but only 2 staff"
+       - Confidence score
+   - If `narrative_focus="anomaly"`: auto-fly to worst anomaly, open card
+
+2. **Impact heatmap**:
+   - If `narrative_focus="impact"`:
+     - Generate grid across Ghana (same as `find_coverage_gaps`)
+     - For each red hex (low density):
+       - Calculate population that would gain access if facility added
+       - Color: deep red (high impact) → yellow → transparent
+     - Add as overlay layer
+   - On click of impact zone:
+     - Card: "Placing facility here → 50,000 people gain access"
+     - Show which deserts it would close
+
+**Verify:**
+- `geo_map(narrative_focus="anomaly")` → Flies to worst facility, anomaly card open
+- `geo_map(narrative_focus="impact")` → Impact heatmap active, click shows coverage gain
+
+---
+
+## Execution Plan
+
+**Total: 12 hours** — Build phases sequentially in priority order:
+
+1. **Phase 1** (4h) — Model → UI data flow [CRITICAL]
+2. **Phase 2** (3h) — H3 hex grid [SIGNATURE VISUAL]
+3. **Phase 3** (5h) — Anomaly + Impact [DEMO BEATS #2 + #4]
+
+**Assignment:**
+- **Hannes:** Phase 1 (data flow, tool params)
+- **Fourth Member (Map Dev):** Phase 2 (h3-js, hex rendering)
+- **Jakob:** Phase 3 (anomaly integration, impact heatmap)
+
+**Required env vars:**
+- `MAPBOX_TOKEN` (get from Mapbox, free tier)
+- `OASIS_DATASET=vf-ghana`
+
+**Cut features** (don't build):
+- Interactive filters (model controls everything)
+- Patient routing (doesn't score high enough)
+- 3D buildings, narration, fullscreen
+- Bidirectional commands (too risky for 45 sec)
+
+**Demo script rehearsal:**
+```bash
+# Test exact demo flow
+oasis use vf-ghana
+
+# Beat 1: Deserts
+geo_map(mode="deserts", condition="surgery", highlight_region="Northern", initial_zoom=7, narrative_focus="deserts")
+# Expect: Red hexes pulse in Northern Ghana, camera flies there
+
+# Beat 2: Anomaly
+geo_map(narrative_focus="anomaly")
+# Expect: Fly to facility with ⚠️ badge, card shows "Claims 50 surgeries, only 2 staff"
+
+# Beat 3: Impact
+geo_map(narrative_focus="impact", condition="surgery")
+# Expect: Heatmap shows optimal placement, click → "50,000 people gain access"
 ```

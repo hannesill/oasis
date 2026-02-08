@@ -782,6 +782,14 @@ app.ontoolresult = (result: any) => {
 // Handle host context changes (theme, safe area, display modes)
 app.onhostcontextchanged = (ctx) => {
   applyHostContext(ctx);
+  if (ctx.displayMode) {
+    currentDisplayMode = ctx.displayMode;
+    $('tog-fullscreen').classList.toggle('on', currentDisplayMode === 'fullscreen');
+    setTimeout(() => map?.resize(), 100);
+  }
+  if (ctx.availableDisplayModes) {
+    $('tog-fullscreen').style.display = ctx.availableDisplayModes.includes('fullscreen') ? '' : 'none';
+  }
 };
 
 // Handle teardown
@@ -791,6 +799,19 @@ app.onteardown = async () => {
 };
 
 // ═══════════════════════════════════════════════════════════════
+// FULLSCREEN TOGGLE
+// ═══════════════════════════════════════════════════════════════
+let currentDisplayMode: string = 'inline';
+
+async function toggleFullscreen(): Promise<void> {
+  const newMode = currentDisplayMode === 'fullscreen' ? 'inline' : 'fullscreen';
+  const result = await app.requestDisplayMode({ mode: newMode });
+  currentDisplayMode = result.mode;
+  $('tog-fullscreen').classList.toggle('on', currentDisplayMode === 'fullscreen');
+  setTimeout(() => map?.resize(), 100);
+}
+
+// ═══════════════════════════════════════════════════════════════
 // EVENT LISTENERS
 // ═══════════════════════════════════════════════════════════════
 $('btn-search').addEventListener('click', doSearch);
@@ -798,6 +819,7 @@ $('btn-gaps').addEventListener('click', doGaps);
 $('btn-clear').addEventListener('click', resetGlobe);
 $('btn-close-detail').addEventListener('click', closeDetail);
 $('btn-globe')?.addEventListener('click', resetGlobe);
+$('tog-fullscreen').addEventListener('click', toggleFullscreen);
 
 ($('inp-radius') as HTMLInputElement).addEventListener('input', (e) => {
   $('radius-display').textContent = (e.target as HTMLInputElement).value + ' km';
@@ -824,6 +846,10 @@ document.querySelectorAll('[data-layer]').forEach(btn => {
 app.connect().then(() => {
   const ctx = app.getHostContext();
   if (ctx) applyHostContext(ctx);
+
+  // Request initial iframe height from the host
+  app.sendSizeChanged({ width: 0, height: 600 });
+
   showApiStatus('Connected to Claude Desktop via MCP', true);
   $('status-dot').style.background = 'var(--green)';
 });
