@@ -23,11 +23,11 @@ class TestToolInputOutput:
 
         @dataclass
         class CustomInput(ToolInput):
-            patient_id: int
+            facility_id: int
             limit: int = 10
 
-        input_obj = CustomInput(patient_id=123, limit=5)
-        assert input_obj.patient_id == 123
+        input_obj = CustomInput(facility_id=123, limit=5)
+        assert input_obj.facility_id == 123
         assert input_obj.limit == 5
 
     def test_tool_output_with_result(self):
@@ -106,7 +106,7 @@ class TestToolProtocol:
 
         compatible_ds = DatasetDefinition(
             name="test-compatible",
-            modalities={Modality.TABULAR, Modality.NOTES},
+            modalities={Modality.TABULAR},
         )
 
         assert tool.is_compatible(compatible_ds) is True
@@ -115,11 +115,11 @@ class TestToolProtocol:
         """Test that tool is not compatible when dataset lacks required modality."""
 
         class MockTool:
-            name = "notes_tool"
-            description = "A notes tool"
+            name = "tabular_tool"
+            description = "A tabular tool"
             input_model = ToolInput
             output_model = ToolOutput
-            required_modalities = frozenset({Modality.NOTES})
+            required_modalities = frozenset({Modality.TABULAR})
             supported_datasets = None
 
             def invoke(self, dataset, params):
@@ -137,10 +137,10 @@ class TestToolProtocol:
 
         tool = MockTool()
 
-        # Dataset without NOTES modality
+        # Dataset without TABULAR modality
         incompatible_ds = DatasetDefinition(
-            name="test-no-notes",
-            modalities={Modality.TABULAR},
+            name="test-no-tabular",
+            modalities=frozenset(),
         )
 
         assert tool.is_compatible(incompatible_ds) is False
@@ -149,12 +149,12 @@ class TestToolProtocol:
         """Test that tool can restrict to specific datasets."""
 
         class MockTool:
-            name = "mimic_specific_tool"
-            description = "MIMIC-only tool"
+            name = "vf_specific_tool"
+            description = "VF Ghana-only tool"
             input_model = ToolInput
             output_model = ToolOutput
             required_modalities = frozenset({Modality.TABULAR})
-            supported_datasets = frozenset({"mimic-iv-demo", "mimic-iv"})
+            supported_datasets = frozenset({"vf-ghana"})
 
             def invoke(self, dataset, params):
                 return ToolOutput(result="mock")
@@ -172,18 +172,18 @@ class TestToolProtocol:
         tool = MockTool()
 
         # Compatible dataset in supported list
-        mimic_ds = DatasetDefinition(
-            name="mimic-iv-demo",
+        vf_ds = DatasetDefinition(
+            name="vf-ghana",
             modalities={Modality.TABULAR},
         )
-        assert tool.is_compatible(mimic_ds) is True
+        assert tool.is_compatible(vf_ds) is True
 
         # Dataset with modalities but not in supported list
-        eicu_ds = DatasetDefinition(
-            name="eicu",
+        other_ds = DatasetDefinition(
+            name="other-dataset",
             modalities={Modality.TABULAR},
         )
-        assert tool.is_compatible(eicu_ds) is False
+        assert tool.is_compatible(other_ds) is False
 
     def test_tool_invoke_returns_output(self):
         """Test that tool invoke method returns ToolOutput."""
@@ -212,11 +212,11 @@ class TestToolProtocol:
             name="test-dataset",
             modalities={Modality.TABULAR},
         )
-        params = CustomInput(query="SELECT * FROM patients")
+        params = CustomInput(query="SELECT * FROM vf.facilities")
 
         output = tool.invoke(dataset, params)
 
         assert isinstance(output, ToolOutput)
-        assert "SELECT * FROM patients" in output.result
+        assert "SELECT * FROM vf.facilities" in output.result
         assert "test-dataset" in output.result
         assert output.metadata["dataset"] == "test-dataset"

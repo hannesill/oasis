@@ -42,8 +42,7 @@ class SetDatasetInput(ToolInput):
 class ListDatasetsTool:
     """Tool for listing all available datasets.
 
-    This tool shows which datasets are configured and available,
-    both locally (DuckDB) and remotely (BigQuery).
+    This tool shows which datasets are configured and available locally (DuckDB).
 
     Returns:
         dict with active dataset, backend info, and dataset availability
@@ -65,7 +64,7 @@ class ListDatasetsTool:
         Returns:
             dict with:
                 - active_dataset: str | None - Currently active dataset
-                - backend: str - Backend type (duckdb or bigquery)
+                - backend: str - Backend type (duckdb)
                 - datasets: dict[str, dict] - Dataset availability info
         """
         active = get_active_dataset()
@@ -99,7 +98,6 @@ class SetDatasetTool:
     """Tool for switching the active dataset.
 
     Changes which dataset subsequent queries will run against.
-    Automatically handles both DuckDB and BigQuery backends.
 
     Returns:
         dict with new dataset info and any warnings
@@ -122,7 +120,6 @@ class SetDatasetTool:
             dict with:
                 - dataset_name: str - New active dataset
                 - db_present: bool - Whether local DB exists
-                - bigquery_support: bool - Whether BigQuery is configured
                 - modalities: list[str] - Available modalities
                 - warnings: list[str] - Any warnings
 
@@ -131,7 +128,6 @@ class SetDatasetTool:
         """
         dataset_name = params.dataset_name.lower()
         availability = detect_available_local_datasets()
-        backend_name = get_active_backend()
 
         if dataset_name not in availability:
             supported = ", ".join(availability.keys())
@@ -140,43 +136,22 @@ class SetDatasetTool:
                 dataset_name=dataset_name,
             )
 
-        # Check backend compatibility before switching
         info = availability[dataset_name]
         ds_def = DatasetRegistry.get(dataset_name)
-
-        if ds_def and not ds_def.bigquery_dataset_ids and backend_name == "bigquery":
-            available = [
-                name
-                for name in availability
-                if (ds := DatasetRegistry.get(name)) and ds.bigquery_dataset_ids
-            ]
-            hint = (
-                f" BigQuery-compatible datasets: {', '.join(available)}."
-                if available
-                else ""
-            )
-            raise DatasetError(
-                f"Dataset '{dataset_name}' is not available on the BigQuery backend."
-                f"{hint}"
-                f" Or switch to DuckDB: set the OASIS_BACKEND environment variable"
-                f" or run `oasis backend duckdb`.",
-                dataset_name=dataset_name,
-            )
 
         set_active_dataset(dataset_name)
 
         warnings: list[str] = []
 
-        if not info["db_present"] and backend_name == "duckdb":
+        if not info["db_present"]:
             warnings.append(
                 "Local database not found. "
-                "You may need to run initialization if using DuckDB."
+                "You may need to run initialization first."
             )
 
         return {
             "dataset_name": dataset_name,
             "db_present": info["db_present"],
-            "bigquery_support": bool(ds_def and ds_def.bigquery_dataset_ids),
             "modalities": [m.name for m in ds_def.modalities] if ds_def else [],
             "warnings": warnings,
         }

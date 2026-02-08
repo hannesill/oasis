@@ -50,9 +50,7 @@ class TestGetDatabaseSchemaTool:
     def test_invoke_returns_table_list(self, mock_dataset, mock_backend):
         """Test that invoke returns dict with tables."""
         mock_backend.get_table_list.return_value = [
-            "mimiciv_hosp.patients",
-            "mimiciv_hosp.admissions",
-            "mimiciv_icu.icustays",
+            "vf.facilities",
         ]
 
         with patch("oasis.core.tools.tabular.get_backend", return_value=mock_backend):
@@ -61,9 +59,7 @@ class TestGetDatabaseSchemaTool:
 
             # Result is now a dict
             assert result["tables"] == [
-                "mimiciv_hosp.patients",
-                "mimiciv_hosp.admissions",
-                "mimiciv_icu.icustays",
+                "vf.facilities",
             ]
             assert result["backend_info"] == "Mock backend info"
 
@@ -98,8 +94,8 @@ class TestGetDatabaseSchemaTool:
     def test_is_not_compatible_without_tabular_modality(self):
         """Test incompatibility without TABULAR modality."""
         dataset = DatasetDefinition(
-            name="notes-only-dataset",
-            modalities={Modality.NOTES},
+            name="empty-dataset",
+            modalities=frozenset(),
         )
         tool = GetDatabaseSchemaTool()
         assert tool.is_compatible(dataset) is False
@@ -113,11 +109,11 @@ class TestGetTableInfoTool:
         schema_df = pd.DataFrame(
             {
                 "cid": [0, 1],
-                "name": ["subject_id", "gender"],
+                "name": ["pk_unique_id", "name"],
                 "type": ["INTEGER", "VARCHAR"],
             }
         )
-        sample_df = pd.DataFrame({"subject_id": [1, 2], "gender": ["M", "F"]})
+        sample_df = pd.DataFrame({"pk_unique_id": [1, 2], "name": ["Facility A", "Facility B"]})
 
         mock_backend.get_table_info.return_value = QueryResult(
             dataframe=schema_df,
@@ -130,17 +126,17 @@ class TestGetTableInfoTool:
 
         with patch("oasis.core.tools.tabular.get_backend", return_value=mock_backend):
             tool = GetTableInfoTool()
-            params = GetTableInfoInput(table_name="patients", show_sample=True)
+            params = GetTableInfoInput(table_name="facilities", show_sample=True)
             result = tool.invoke(mock_dataset, params)
 
-            assert result["table_name"] == "patients"
+            assert result["table_name"] == "facilities"
             assert isinstance(result["schema"], pd.DataFrame)
             assert isinstance(result["sample"], pd.DataFrame)
 
     def test_invoke_without_sample(self, mock_dataset, mock_backend):
         """Test invoke with show_sample=False."""
         schema_df = pd.DataFrame(
-            {"cid": [0], "name": ["subject_id"], "type": ["INTEGER"]}
+            {"cid": [0], "name": ["pk_unique_id"], "type": ["INTEGER"]}
         )
         mock_backend.get_table_info.return_value = QueryResult(
             dataframe=schema_df,
@@ -149,10 +145,10 @@ class TestGetTableInfoTool:
 
         with patch("oasis.core.tools.tabular.get_backend", return_value=mock_backend):
             tool = GetTableInfoTool()
-            params = GetTableInfoInput(table_name="patients", show_sample=False)
+            params = GetTableInfoInput(table_name="facilities", show_sample=False)
             result = tool.invoke(mock_dataset, params)
 
-            assert result["table_name"] == "patients"
+            assert result["table_name"] == "facilities"
             assert result["sample"] is None
             mock_backend.get_sample_data.assert_not_called()
 
@@ -178,7 +174,7 @@ class TestExecuteQueryTool:
 
     def test_invoke_executes_safe_query(self, mock_dataset, mock_backend):
         """Test executing a safe SELECT query."""
-        result_df = pd.DataFrame({"subject_id": [1, 2], "gender": ["M", "F"]})
+        result_df = pd.DataFrame({"pk_unique_id": [1, 2], "name": ["Facility A", "Facility B"]})
         mock_backend.execute_query.return_value = QueryResult(
             dataframe=result_df,
             row_count=2,
@@ -186,18 +182,18 @@ class TestExecuteQueryTool:
 
         with patch("oasis.core.tools.tabular.get_backend", return_value=mock_backend):
             tool = ExecuteQueryTool()
-            params = ExecuteQueryInput(sql_query="SELECT * FROM patients LIMIT 10")
+            params = ExecuteQueryInput(sql_query="SELECT * FROM vf.facilities LIMIT 10")
             result = tool.invoke(mock_dataset, params)
 
             assert isinstance(result, pd.DataFrame)
-            assert "subject_id" in result.columns
+            assert "pk_unique_id" in result.columns
             mock_backend.execute_query.assert_called_once()
 
     def test_invoke_blocks_unsafe_query(self, mock_dataset, mock_backend):
         """Test that unsafe queries raise SecurityError."""
         with patch("oasis.core.tools.tabular.get_backend", return_value=mock_backend):
             tool = ExecuteQueryTool()
-            params = ExecuteQueryInput(sql_query="DROP TABLE patients")
+            params = ExecuteQueryInput(sql_query="DROP TABLE facilities")
 
             with pytest.raises(SecurityError):
                 tool.invoke(mock_dataset, params)
@@ -208,7 +204,7 @@ class TestExecuteQueryTool:
         """Test that SQL injection patterns raise SecurityError."""
         with patch("oasis.core.tools.tabular.get_backend", return_value=mock_backend):
             tool = ExecuteQueryTool()
-            params = ExecuteQueryInput(sql_query="SELECT * FROM patients WHERE 1=1")
+            params = ExecuteQueryInput(sql_query="SELECT * FROM vf.facilities WHERE 1=1")
 
             with pytest.raises(SecurityError):
                 tool.invoke(mock_dataset, params)
@@ -224,7 +220,7 @@ class TestExecuteQueryTool:
 
         with patch("oasis.core.tools.tabular.get_backend", return_value=mock_backend):
             tool = ExecuteQueryTool()
-            params = ExecuteQueryInput(sql_query="SELECT age FROM patients")
+            params = ExecuteQueryInput(sql_query="SELECT age FROM vf.facilities")
 
             with pytest.raises(QueryError) as exc_info:
                 tool.invoke(mock_dataset, params)

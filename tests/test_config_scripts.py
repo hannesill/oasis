@@ -29,26 +29,6 @@ class TestMCPConfigGenerator:
             assert "OASIS_PROJECT_ID" not in config["mcpServers"]["oasis"]["env"]
             assert config["mcpServers"]["oasis"]["args"] == ["-m", "oasis.mcp_server"]
 
-    def test_generate_config_bigquery_with_project(self):
-        """Test generating BigQuery config with project ID."""
-        generator = MCPConfigGenerator()
-
-        with (
-            patch.object(generator, "_validate_python_path", return_value=True),
-            patch.object(generator, "_validate_directory", return_value=True),
-        ):
-            config = generator.generate_config(
-                backend="bigquery", project_id="test-project"
-            )
-
-            # OASIS_BACKEND is no longer in env - backend comes from config file
-            assert "OASIS_BACKEND" not in config["mcpServers"]["oasis"]["env"]
-            assert config["mcpServers"]["oasis"]["env"]["OASIS_PROJECT_ID"] == "test-project"
-            assert (
-                config["mcpServers"]["oasis"]["env"]["GOOGLE_CLOUD_PROJECT"]
-                == "test-project"
-            )
-
     def test_generate_config_duckdb_with_db_path(self):
         """Test generating DuckDB config with custom database path."""
         generator = MCPConfigGenerator()
@@ -58,10 +38,9 @@ class TestMCPConfigGenerator:
             patch.object(generator, "_validate_directory", return_value=True),
         ):
             config = generator.generate_config(
-                backend="duckdb", db_path="/custom/path/database.duckdb"
+                db_path="/custom/path/database.duckdb"
             )
 
-            # OASIS_BACKEND is no longer in env - backend comes from config file
             assert "OASIS_BACKEND" not in config["mcpServers"]["oasis"]["env"]
             assert (
                 config["mcpServers"]["oasis"]["env"]["OASIS_DB_PATH"]

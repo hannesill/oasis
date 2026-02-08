@@ -2,270 +2,133 @@
 
 ## Project Identity
 
-**OASIS** (Orchestrated Agentic System for Intelligent healthcare Synthesis) is a hackathon project. Named after the band behind *Wonderwall*, because we're building the intelligence layer that connects healthcare workers to the communities that need them — "the one that saves you."
+**OASIS** (Orchestrated Agentic System for Intelligent healthcare Synthesis) is a hackathon project. Named after the band behind *Wonderwall*, because we're building the intelligence layer that connects healthcare resources to the communities that need them — "the one that saves you."
 
-**Tone & Vibe:** This project should feel bold, warm, and human. We're building something that matters — connecting doctors to patients in medical deserts — and we're doing it with personality. When in doubt, remember: impressive tech + genuine heart + a touch of rockstar energy = winning demo.
-
-**Demo Easter Eggs:**
-- The project name is a Wonderwall reference — lean into it
-- Demo may feature a few seconds of Wonderwall playing in the background
-- Consider Oasis/Wonderwall-themed naming for features (e.g., "Wonderwall" for the medical desert map, agent responses that occasionally echo lyrics naturally)
-- Creative, smile-inducing touches matter as much as technical depth — surprise the judges
+**Tone & Vibe:** Bold, warm, human. Impressive tech + genuine heart + a touch of rockstar energy = winning demo. Lean into the Wonderwall reference — surprise the judges with creative touches.
 
 ## Challenge Context
 
 **Hackathon Challenge:** "Bridging Medical Deserts" — Building Intelligent Document Parsing Agents for the Virtue Foundation. Sponsored by Databricks.
 
-**Goal:** Build an agentic AI intelligence layer for healthcare that can reason, decide, and act to connect medical expertise with hospitals and communities that need it. Reduce time for patients to receive lifesaving treatment by 100x.
+**Goal:** Build an IDP agent that extracts and verifies medical facility capabilities from messy, unstructured data — and reasons over it to understand where care truly exists and where it is missing. Reduce time for patients to receive lifesaving treatment by 100x.
 
 **Evaluation Criteria:**
-| Criterion | Weight | Our Strategy |
-|-----------|--------|-------------|
-| Technical Accuracy | 35% | Reliable IDP extraction from free-form text, anomaly detection |
-| IDP Innovation | 30% | Structured + unstructured synthesis via OASIS tools + RAG |
-| Social Impact | 25% | Interactive medical desert map, coverage gap identification |
-| User Experience | 10% | Natural language queries in Claude Desktop, OASIS App with interactive map |
+| Criterion | Weight | What Judges Look For | Our Strategy |
+|-----------|--------|---------------------|-------------|
+| Technical Accuracy | 35% | Reliably handle "Must Have" queries from VF Agent Questions; detect anomalies | OASIS tools for the Must Have query categories |
+| IDP Innovation | 30% | Extract + synthesize from unstructured free-form text | Smart tools that parse `procedure`/`equipment`/`capability` and cross-reference with structured data |
+| Social Impact | 25% | Identify medical deserts, aid resource allocation | Interactive Mapbox GL JS desert mapper |
+| User Experience | 10% | Intuitive for non-technical NGO planners, natural language | Claude Desktop natural language interface |
 
-**Core Features Required:**
-1. Unstructured Feature Extraction — Parse free-form `procedure`, `equipment`, `capability` columns
-2. Intelligent Synthesis — Combine unstructured insights with structured facility schemas
-3. Planning System — Accessible system for routing patients to care, usable across experience levels
+**Core Features (MVP):**
+1. **Unstructured Feature Extraction** — Parse free-form `procedure`, `equipment`, `capability` columns
+2. **Intelligent Synthesis** — Combine unstructured insights with structured facility schemas
+3. **Planning System** — Accessible system for routing patients to care, adoptable across experience levels and age groups
 
-**Stretch Goals:**
-1. Row-level and agentic-step-level citations (use MLflow tracing)
-2. Interactive map visualization (Leaflet/Mapbox in OASIS App)
-3. Real-impact features from Databricks/VF collaboration
+**Stretch Goals (from challenge):**
+1. **Citations** — Row-level citations showing what data supports each claim. Bonus: agentic-step-level citations (which data was used at each reasoning step). *Hint from organizers: use experiment tracking tools like MLflow to trace agent loops.*
+2. **Map Visualization** — Interactive map demonstrating conclusions visually
+3. **Real-impact Bonus** — Tackle questions from the VF Agent Questions doc (see below). The Databricks team is collaborating with VF to ship an agent by June 7th — our work could feed into that.
+
+**Suggested Tech Stack (from organizers):** RAG + Agentic workflows. They suggest langgraph/crewAI, MLflow, Databricks/FAISS for RAG, Genie for Text2SQL. We deviate intentionally: OASIS/MCP with Claude Desktop instead, DuckDB locally. But we should use Databricks (Vector Search or MLflow) to show we engaged with the sponsor's stack.
+
+**Out of Scope:** BigQuery, OAuth2, any cloud backends beyond Databricks
+
+## VF Agent Questions — The Actual Acceptance Criteria
+
+The VF Agent Questions doc (`Virtue Foundation Agent Questions - Hack Nation.md`) defines **59 questions across 11 categories** with MoSCoW priorities. The **"Must Have" questions are what judges will test for the 35% Technical Accuracy score.** Tackling "Should Have" and beyond earns the real-impact bonus.
+
+**Must Have queries we need to nail:**
+- **Basic lookups:** "How many hospitals have cardiology?", "Which region has the most [type] hospitals?" → Genie/Text2SQL equivalent
+- **Geospatial:** "How many hospitals treating [condition] within [X] km of [location]?", "Where are the largest cold spots for [procedure]?" → requires geospatial calculation
+- **Anomaly detection:** "Which facilities claim unrealistic number of procedures relative to size?", "Where do things that shouldn't move together appear?" (e.g., huge bed count + minimal surgical equipment) → our anomaly tools
+- **Resource gaps:** "Which procedures depend on very few facilities?", "Where is oversupply vs scarcity of high-complexity procedures?" → medical desert analysis
+- **Workforce:** "Where is the workforce for [subspecialty] actually practicing?" → structured data queries
+- **NGO gaps:** "Where are gaps where no organizations work despite evident need?" → desert mapping
+
+**How our tools map to VF's architecture:**
+| VF Concept | Our Implementation |
+|------------|-------------------|
+| Genie Chat (Text2SQL) | `execute_query` tool (DuckDB) |
+| Vector Search with Filtering | `extract_capabilities` tool + DuckDB full-text search (stretch: Databricks VS) |
+| Medical Reasoning Agent | Claude's native reasoning over tool results |
+| Geospatial Calculation | `find_medical_deserts` + `route_patient` tools |
+| External Data | Out of scope for hackathon |
+
+## Team & Workload
+
+| Owner | Track | Focus |
+|-------|-------|-------|
+| Rafi | RAG & Databricks | Databricks Vector Search integration, RAG pipeline |
+| Hannes | Orchestration | MCP code execution, multi-step reasoning, integration |
+| Jakob | Anomaly Detection | Anomaly detection tools for the Ghana dataset |
+| Fourth Member | Map Visualization | Mapbox GL JS interactive map (Medical Desert Mapper app) |
+
+**Integration contract:** Agree early on JSON shapes that tools return and the map consumes.
+
+## Key Technical Challenges
+
+**Multi-step dataframe reasoning in MCP:** Current MCP tools are text-in/text-out, insufficient for complex analysis. **Approach:** Design "smart tools" that run full pipelines internally (SQL → parse → cross-reference → structured result) rather than requiring model-orchestrated dataframe passes. Investigate MCP code execution as a complementary option.
+
+**Databricks integration:** Vector Search for RAG primarily satisfies eval criteria — 987 rows don't need it. If time is tight, prioritize **MLflow tracing for citations** (directly maps to stretch goal #1 and supports the 35% Technical Accuracy criterion) over RAG.
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────┐
-│                  Claude Desktop                      │
-│  ┌───────────────────────────────────────────────┐  │
-│  │              OASIS MCP Server                  │  │
-│  │  (VF-specific tools)                          │  │
-│  └───────────────────────────────────────────────┘  │
-│  ┌───────────────────────────────────────────────┐  │
-│  │           Medical Desert Mapper App            │  │
-│  │  (OASIS App — interactive map in Claude Desktop)│  │
-│  └───────────────────────────────────────────────┘  │
-└──────────────────────┬──────────────────────────────┘
-                       │ MCP Protocol
-┌──────────────────────┴──────────────────────────────┐
-│                    OASIS Core                         │
-│  ┌──────────┐ ┌──────────────┐ ┌─────────────────┐  │
-│  │ DuckDB   │ │ OASIS Skills │ │ OASIS Tools     │  │
-│  │ (VF Data)│ │ (IDP, Anomaly│ │ (Extract, Route,│  │
-│  │          │ │  Detection)  │ │  Analyze)       │  │
-│  └──────────┘ └──────────────┘ └─────────────────┘  │
-└──────────────────────┬──────────────────────────────┘
-                       │ Optional
-┌──────────────────────┴──────────────────────────────┐
-│              Databricks (Stretch)                     │
-│  Vector Search (RAG) │ MLflow (Tracing/Citations)    │
-└──────────────────────────────────────────────────────┘
-```
+Claude Desktop → OASIS MCP Server (VF tools) + Medical Desert Mapper App (interactive map)
+→ OASIS Core: DuckDB (VF data) + Skills (IDP, Anomaly) + Tools (Extract, Route, Analyze)
+→ Optional: Databricks Vector Search (RAG) + MLflow (Tracing/Citations)
 
 ## Dataset: Virtue Foundation Ghana
 
-**File:** `Virtue Foundation Ghana v0.3 - Sheet1.csv`
-**Records:** ~1,002 healthcare facilities in Ghana
-**Schema docs:** `Virtue Foundation Scheme Documentation.md`
-**Pydantic models:** `prompts_and_pydantic_models/`
+~1,002 healthcare facilities in Ghana. Schema docs: `Virtue Foundation Scheme Documentation.md`. Pydantic models: `prompts_and_pydantic_models/`.
 
-### Key Columns
+**Key insight:** Free-form fields (`procedure`, `equipment`, `capability`) are JSON arrays of strings — richest data. Many fields are null/empty — detecting these gaps IS the feature. Specialties may be incomplete vs free-form text. Some facilities duplicated (same `pk_unique_id`, different `content_table_id`).
 
-**Structured fields:**
-- `name` — Facility name
-- `specialties` — JSON array of medical specialty enums (camelCase, e.g. `internalMedicine`)
-- `facilityTypeId` — `hospital`, `pharmacy`, `doctor`, `clinic`, `dentist`
-- `operatorTypeId` — `public`, `private`
-- `affiliationTypeIds` — `faith-tradition`, `philanthropy-legacy`, `community`, `academic`, `government`
-- `address_city`, `address_stateOrRegion`, `address_country` — Location
-- `numberDoctors`, `capacity`, `area` — Facility metrics
+## What to Build
 
-**Free-form text fields (IDP target):**
-- `procedure` — JSON array of clinical services (e.g., "Performs emergency cesarean sections")
-- `equipment` — JSON array of medical devices (e.g., "Has Siemens CT scanner")
-- `capability` — JSON array of care levels (e.g., "Level II trauma center", "24/7 emergency care")
+### Tools (following protocol in `src/oasis/core/tools/base.py`)
+1. **`analyze_facility`** — Deep analysis combining structured + free-form data
+2. **`find_medical_deserts`** — Geographic areas lacking specific specialties/capabilities (covers VF geospatial + resource gap queries)
+3. **`detect_anomalies`** — Flag inconsistent facility claims (covers VF anomaly detection Must Haves: unrealistic procedure counts, mismatched infrastructure signals)
+4. **`route_patient`** — Nearest capable facility for a medical need + location (the "planning system")
+5. **`extract_capabilities`** — IDP re-parsing of free-form text with enhanced extraction (covers VF validation queries)
 
-**Metadata:**
-- `source_url` — Original data source URL
-- `pk_unique_id` — Primary key
-- `organization_type` — Always "facility" in this dataset
-- `phone_numbers`, `email`, `websites`, `officialWebsite` — Contact info
+### Medical Desert Mapper App
+Mapbox GL JS map (chosen for 3D), facilities as colored markers, H3 hex grid overlay, filter controls, facility detail sidebar, desert highlighting. Visually stunning — centerpiece of the demo. See `docs/OASIS_APPS.md` for protocol, `src/oasis/apps/__init__.py` for registration. Detailed implementation plan in `PLAN.md`.
 
-### Data Quality Notes
-- Many fields are `null` or empty JSON arrays `[]`
-- Free-form text fields contain the richest information but need parsing
-- Some facilities appear duplicated with same `pk_unique_id` but different `content_table_id`
-- Specialties are pre-extracted but may be incomplete — cross-check against free-form text
-- Address data is inconsistent — some have full addresses, many have only city/country
-- Equipment and procedure fields are often empty even for large hospitals — this is a gap to detect
-
-## OASIS Integration Guide
-
-### Custom Dataset Setup
-
-The VF Ghana dataset should be registered as a custom OASIS dataset:
-
-```json
-{
-  "name": "vf-ghana",
-  "description": "Virtue Foundation Ghana Healthcare Facilities",
-  "primary_verification_table": "vf.facilities",
-  "modalities": ["TABULAR"],
-  "schema_mapping": {"": "vf"}
-}
-```
-
-**Init:** `oasis init vf-ghana --src <path-to-csv>`
-
-### New Tools to Build
-
-Following OASIS's tool protocol pattern (`src/oasis/core/tools/base.py`):
-
-1. **`analyze_facility`** — Deep analysis of a single facility, combining structured + free-form data
-2. **`find_medical_deserts`** — Identify geographic areas lacking specific specialties or capabilities
-3. **`detect_anomalies`** — Flag suspicious or inconsistent facility claims (e.g., claims trauma capability but no CT scanner)
-4. **`route_patient`** — Given a medical need and location, find the nearest capable facility (the "planning system")
-5. **`extract_capabilities`** — IDP tool that re-parses free-form text with enhanced extraction
-
-### New OASIS App to Build
-
-**Medical Desert Mapper** — Interactive map app (first OASIS App in this project):
-- Leaflet.js or Mapbox GL JS map of Ghana
-- Facilities as markers, color-coded by type/specialty
-- Heatmap overlay showing coverage density
-- Filter controls: specialty, facility type, capability
-- Click facility for detail popup
-- Highlight "deserts" — regions with no coverage for a given specialty
-- The app should be visually stunning — this is the centerpiece of the demo
-
-### New Skills to Build
-
-Following OASIS's skill pattern (`src/oasis/skills/`):
-
-1. **`vf-schema`** — Teaches the agent about VF Ghana data structure, column semantics, and query patterns
-2. **`idp-extraction`** — Patterns for parsing free-form medical text into structured facts
-3. **`medical-desert-analysis`** — How to identify and characterize healthcare coverage gaps
+### Skills (in `src/oasis/skills/clinical/`)
+1. **`vf-schema`** — VF Ghana data structure, column semantics, query patterns
+2. **`idp-extraction`** — Parsing free-form medical text into structured facts
+3. **`medical-desert-analysis`** — Identifying and characterizing healthcare coverage gaps
 
 ## Development Conventions
 
-### Code Style
-- Python 3.10+, type hints everywhere
-- Ruff for linting (line length 88)
-- Follow existing OASIS patterns — protocol-based tools, modality filtering, native return types
-- Tests in `tests/` with pytest
-
-### OASIS Patterns to Follow
-- **Tools return native Python types** (DataFrame, dict, list) — MCP layer in `mcp_server.py` serializes via `serialize_for_mcp()`
-- **Proactive compatibility checking** before tool invocation (ToolSelector)
+- Python 3.10+, type hints, Ruff (line length 88), pytest
+- **Tools return native Python types** — MCP layer serializes via `serialize_for_mcp()`
 - **Canonical schema names** — `schema.table` format (e.g., `vf.facilities`)
 - **Modality-based filtering** — tools declare `required_modalities: frozenset[Modality]`
-- **DuckDB only** — no BigQuery, no cloud backends
-- **Graceful degradation** — apps return text in non-supporting hosts
-- **Skills are markdown** — YAML frontmatter + content in `src/oasis/skills/clinical/<name>/SKILL.md`
+- **DuckDB only** — no cloud backends (except optional Databricks for RAG/tracing)
+- **Skills are markdown** — YAML frontmatter in `src/oasis/skills/clinical/<name>/SKILL.md`
+- Branch: `main` (hackathon, move fast). Don't commit secrets or node_modules.
 
-### File Organization (what we're adding)
-```
-src/oasis/
-├── core/tools/
-│   └── vf_ghana.py          # New VF-specific tools
-├── apps/
-│   └── desert_mapper/        # New OASIS App (first app — no reference impl exists)
-│       ├── __init__.py
-│       ├── tool.py           # Tool classes (registered in apps/__init__.py)
-│       ├── query_builder.py  # SQL generation for map queries
-│       └── ui/               # Vite + Leaflet.js UI bundle
-│           ├── src/
-│           ├── package.json
-│           └── vite.config.ts
-└── skills/
-    └── clinical/
-        ├── vf-schema/SKILL.md
-        ├── idp-extraction/SKILL.md
-        └── medical-desert-analysis/SKILL.md
-```
+## Demo Script (under 2 minutes — bonus for conciseness)
 
-Note: The cohort_builder reference app was removed. For building the Desert Mapper app,
-reference `docs/OASIS_APPS.md` for the protocol and `src/oasis/apps/__init__.py` for registration.
-The app tool needs to declare `_meta.ui.resourceUri` pointing to a bundled HTML resource.
-
-### Git Workflow
-- Branch: `main` (hackathon, move fast)
-- Commit messages: concise, imperative, no fluff
-- Don't commit secrets, large data files, or node_modules
-
-## Demo Script (60-90 seconds)
-
-### Act 1: "I said maybe..." (0-20s)
-Open Claude Desktop. Natural language query:
-> "Where are the surgical deserts in Northern Ghana? Show me on a map."
-
-Agent reasons over VF data, launches the Medical Desert Mapper app. Map zooms to Northern Ghana, red zones pulse where no surgical capability exists.
-
-### Act 2: "You're gonna be the one that saves me" (20-50s)
-> "This facility in Tamale claims emergency surgery capability. Does the data support that?"
-
-Agent runs anomaly detection — cross-references equipment, procedures, and capabilities. Flags: "Claims emergency surgery but has no listed surgical equipment or operating theater. Confidence: Low. Recommend verification."
-
-Citations show exactly which data fields were checked.
-
-### Act 3: "After all, you're my wonderwall" (50-75s)
-> "A patient in Bolgatanga needs an emergency appendectomy. Route them to care."
-
-Agent runs the planning system — finds nearest facility with surgical capability, estimates travel, suggests alternatives. Shows route on the map.
-
-### Closing (75-90s)
-Pull back to show the full map of Ghana with coverage overlay. Text on screen: every dot is a facility, every gap is a patient waiting. OASIS connects them.
-
-## Codebase State (Post-Cleanup)
-
-What remains:
-
-**Core (kept):**
-- `src/oasis/mcp_server.py` — MCP server (FastMCP), stripped of cohort builder + OAuth2
-- `src/oasis/api.py` — Python API (set_dataset, execute_query, get_schema, etc.)
-- `src/oasis/cli.py` — CLI (oasis init, oasis use, oasis status, oasis config, oasis skills)
-- `src/oasis/config.py` — Config management (oasis_data/config.json)
-- `src/oasis/data_io.py` — CSV-to-Parquet conversion, dataset initialization
-- `src/oasis/core/tools/` — Tool protocol, registry, tabular tools, notes tools, management
-- `src/oasis/core/backends/duckdb.py` — DuckDB backend (only backend now)
-- `src/oasis/core/datasets.py` — DatasetRegistry, DatasetDefinition, Modality enum
-- `src/oasis/core/validation.py` — SQL security validation
-- `src/oasis/core/serialization.py` — MCP result serialization
-
-**Infrastructure shells (kept, empty — we fill these):**
-- `src/oasis/apps/__init__.py` — App registration (init_apps with empty body, ready for our apps)
-- `src/oasis/skills/installer.py` — Skill installation system (no skills content, ready for ours)
-- `src/oasis/skills/SKILL_FORMAT.md` — How to write skills (reference doc)
-- `src/oasis/skills/SKILLS_INDEX.md` — Skill catalog format
-
-**Removed (not needed for OASIS):**
-- BigQuery backend, OAuth2 auth, derived tables (MIMIC-IV SQL)
-- All clinical skills (SOFA, sepsis, KDIGO, etc.)
-- All system skills (oasis-api, oasis-research, MIMIC mappings)
-- Cohort Builder app (reference app — gone, we build our own from scratch)
-- Webapp (marketing site), benchmarks
+1. **"I said maybe..."** — "Where are the surgical deserts in Northern Ghana?" → Map launches, red zones pulse
+2. **"You're gonna be the one that saves me"** — "Does this Tamale facility really do emergency surgery?" → Anomaly detection with citations
+3. **"After all, you're my wonderwall"** — "Route a patient in Bolgatanga to emergency appendectomy" → Planning system with route on map
+4. **Strategic recommendation** — "Where should we place one new surgeon to close the biggest gap?" → ROI-based resource allocation on map
+5. **Closing** — Full Ghana coverage overlay. Every dot a facility, every gap a patient waiting.
 
 ## Quick Reference
 
 | What | Where |
 |------|-------|
 | Challenge description | `CHALLENGE.md` |
-| VF Ghana data | `Virtue Foundation Ghana v0.3 - Sheet1.csv` |
+| VF Agent Questions (acceptance criteria) | `Virtue Foundation Agent Questions - Hack Nation.md` |
+| VF Ghana data | `vf-ghana.csv` |
 | Schema docs | `Virtue Foundation Scheme Documentation.md` |
-| Pydantic models | `prompts_and_pydantic_models/` |
+| Tool protocol | `src/oasis/core/tools/base.py` |
 | MCP server | `src/oasis/mcp_server.py` |
-| Python API | `src/oasis/api.py` |
-| Tool protocol + registry | `src/oasis/core/tools/base.py`, `registry.py` |
-| Tabular tools (execute_query etc.) | `src/oasis/core/tools/tabular.py` |
-| DuckDB backend | `src/oasis/core/backends/duckdb.py` |
-| Apps infrastructure | `src/oasis/apps/__init__.py` (empty, add ours here) |
-| Skills infrastructure | `src/oasis/skills/installer.py`, `SKILL_FORMAT.md` |
-| Custom dataset guide | `docs/CUSTOM_DATASETS.md` |
-| OASIS Apps guide | `docs/OASIS_APPS.md` |
-| Tool reference | `docs/TOOLS.md` |
-| Dev guide (adding tools) | `docs/DEVELOPMENT.md` |
-| Skills guide | `docs/SKILLS.md` |
+| Apps guide | `docs/OASIS_APPS.md` |
+| Dev guide | `docs/DEVELOPMENT.md` |
+| Custom datasets | `docs/CUSTOM_DATASETS.md` |

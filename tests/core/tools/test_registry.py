@@ -28,39 +28,18 @@ class MockTabularTool:
         return True
 
 
-class MockNotesTool:
-    """Mock tool requiring NOTES modality."""
+class MockVFGhanaOnlyTool:
+    """Mock tool that only works with VF Ghana dataset."""
 
-    name = "mock_notes"
-    description = "Mock notes tool"
-    input_model = ToolInput
-    output_model = ToolOutput
-    required_modalities = frozenset({Modality.NOTES})
-    supported_datasets = None
-
-    def invoke(self, dataset: DatasetDefinition, params: ToolInput) -> ToolOutput:
-        return ToolOutput(result="notes data")
-
-    def is_compatible(self, dataset: DatasetDefinition) -> bool:
-        if self.supported_datasets and dataset.name not in self.supported_datasets:
-            return False
-        if not self.required_modalities.issubset(dataset.modalities):
-            return False
-        return True
-
-
-class MockMIMICOnlyTool:
-    """Mock tool that only works with MIMIC datasets."""
-
-    name = "mock_mimic_only"
-    description = "Mock MIMIC-only tool"
+    name = "mock_vf_ghana_only"
+    description = "Mock VF Ghana-only tool"
     input_model = ToolInput
     output_model = ToolOutput
     required_modalities = frozenset({Modality.TABULAR})
-    supported_datasets = frozenset({"mimic-iv", "mimic-iv-demo"})
+    supported_datasets = frozenset({"vf-ghana"})
 
     def invoke(self, dataset: DatasetDefinition, params: ToolInput) -> ToolOutput:
-        return ToolOutput(result="mimic data")
+        return ToolOutput(result="vf ghana data")
 
     def is_compatible(self, dataset: DatasetDefinition) -> bool:
         if self.supported_datasets and dataset.name not in self.supported_datasets:
@@ -107,7 +86,7 @@ class TestToolRegistry:
     def test_list_all_tools(self):
         """Test listing all registered tools."""
         tool1 = MockTabularTool()
-        tool2 = MockNotesTool()
+        tool2 = MockVFGhanaOnlyTool()
 
         ToolRegistry.register(tool1)
         ToolRegistry.register(tool2)
@@ -125,7 +104,7 @@ class TestToolRegistry:
     def test_reset_clears_registry(self):
         """Test that reset clears all registered tools."""
         ToolRegistry.register(MockTabularTool())
-        ToolRegistry.register(MockNotesTool())
+        ToolRegistry.register(MockVFGhanaOnlyTool())
 
         assert len(ToolRegistry.list_all()) == 2
 
@@ -139,67 +118,64 @@ class TestToolSelector:
     def test_selector_returns_compatible_tools(self):
         """Test that selector returns only compatible tools."""
         ToolRegistry.register(MockTabularTool())
-        ToolRegistry.register(MockMIMICOnlyTool())
+        ToolRegistry.register(MockVFGhanaOnlyTool())
 
         selector = ToolSelector()
-        mimic_demo = DatasetRegistry.get("mimic-iv-demo")
+        vf_ghana = DatasetRegistry.get("vf-ghana")
 
-        compatible = selector.tools_for_dataset(mimic_demo)
+        compatible = selector.tools_for_dataset(vf_ghana)
 
-        # Both tools should be compatible with mimic-demo
+        # Both tools should be compatible with vf-ghana
         assert len(compatible) == 2
         tool_names = {tool.name for tool in compatible}
         assert "mock_tabular" in tool_names
-        assert "mock_mimic_only" in tool_names
+        assert "mock_vf_ghana_only" in tool_names
 
     def test_selector_filters_by_modality(self):
         """Test selector filters by required modalities."""
         ToolRegistry.register(MockTabularTool())
-        ToolRegistry.register(MockNotesTool())
 
         selector = ToolSelector()
-        mimic = DatasetRegistry.get("mimic-iv")
+        vf_ghana = DatasetRegistry.get("vf-ghana")
 
-        compatible = selector.tools_for_dataset(mimic)
+        compatible = selector.tools_for_dataset(vf_ghana)
 
-        # mimic-iv has TABULAR but not NOTES modality
+        # vf-ghana has TABULAR modality
         tool_names = {tool.name for tool in compatible}
         assert "mock_tabular" in tool_names
-        assert "mock_notes" not in tool_names
 
     def test_selector_filters_by_dataset_name(self):
         """Test that selector respects supported_datasets restrictions."""
-        ToolRegistry.register(MockMIMICOnlyTool())
+        ToolRegistry.register(MockVFGhanaOnlyTool())
 
         selector = ToolSelector()
 
-        # Should work with MIMIC datasets
-        mimic = DatasetRegistry.get("mimic-iv-demo")
-        compatible = selector.tools_for_dataset(mimic)
+        # Should work with VF Ghana dataset
+        vf_ghana = DatasetRegistry.get("vf-ghana")
+        compatible = selector.tools_for_dataset(vf_ghana)
         assert len(compatible) == 1
 
-        # Create a non-MIMIC dataset with same modalities
-        eicu = DatasetDefinition(
-            name="eicu",
-            description="eICU database",
+        # Create a non-VF Ghana dataset with same modalities
+        other_ds = DatasetDefinition(
+            name="other-dataset",
+            description="Other database",
             modalities={Modality.TABULAR},
         )
 
-        # Should NOT work with non-MIMIC datasets (even with modalities)
-        compatible = selector.tools_for_dataset(eicu)
+        # Should NOT work with non-VF Ghana datasets (even with modalities)
+        compatible = selector.tools_for_dataset(other_ds)
         assert len(compatible) == 0
 
     def test_selector_by_dataset_name_string(self):
         """Test selector using dataset name as string."""
         ToolRegistry.register(MockTabularTool())
-        ToolRegistry.register(MockNotesTool())
 
         selector = ToolSelector()
 
         # Use string instead of DatasetDefinition
-        compatible = selector.tools_for_dataset("mimic-iv")
+        compatible = selector.tools_for_dataset("vf-ghana")
 
-        # Only tabular tool should match (mimic-iv has TABULAR modality)
+        # Only tabular tool should match (vf-ghana has TABULAR modality)
         tool_names = {tool.name for tool in compatible}
         assert "mock_tabular" in tool_names
 
@@ -215,33 +191,29 @@ class TestToolSelector:
     def test_is_tool_available_by_name(self):
         """Test checking if a specific tool is available."""
         ToolRegistry.register(MockTabularTool())
-        ToolRegistry.register(MockMIMICOnlyTool())
+        ToolRegistry.register(MockVFGhanaOnlyTool())
 
         selector = ToolSelector()
 
-        # Tabular tool available for demo (has TABULAR modality)
-        assert selector.is_tool_available("mock_tabular", "mimic-iv-demo")
+        # Tabular tool available for vf-ghana (has TABULAR modality)
+        assert selector.is_tool_available("mock_tabular", "vf-ghana")
 
-        # MIMIC-only tool is available for demo (it's a MIMIC dataset)
-        assert selector.is_tool_available("mock_mimic_only", "mimic-iv-demo")
-
-        # Both available for full
-        assert selector.is_tool_available("mock_tabular", "mimic-iv")
-        assert selector.is_tool_available("mock_mimic_only", "mimic-iv")
+        # VF Ghana-only tool is available for vf-ghana
+        assert selector.is_tool_available("mock_vf_ghana_only", "vf-ghana")
 
     def test_is_tool_available_with_dataset_definition(self):
         """Test is_tool_available with DatasetDefinition object."""
         ToolRegistry.register(MockTabularTool())
 
         selector = ToolSelector()
-        mimic = DatasetRegistry.get("mimic-iv-demo")
+        vf_ghana = DatasetRegistry.get("vf-ghana")
 
-        assert selector.is_tool_available("mock_tabular", mimic)
+        assert selector.is_tool_available("mock_tabular", vf_ghana)
 
     def test_is_tool_available_nonexistent_tool(self):
         """Test is_tool_available with tool that doesn't exist."""
         selector = ToolSelector()
-        assert not selector.is_tool_available("nonexistent", "mimic-iv-demo")
+        assert not selector.is_tool_available("nonexistent", "vf-ghana")
 
     def test_is_tool_available_unknown_dataset(self):
         """Test is_tool_available with unknown dataset."""
@@ -253,7 +225,7 @@ class TestToolSelector:
     def test_tools_for_dataset_empty_registry(self):
         """Test tools_for_dataset when no tools are registered."""
         selector = ToolSelector()
-        compatible = selector.tools_for_dataset("mimic-iv-demo")
+        compatible = selector.tools_for_dataset("vf-ghana")
 
         assert compatible == []
 
@@ -265,23 +237,15 @@ class TestIntegration:
         """Test complex scenario with multiple tools and datasets."""
         # Register tools
         ToolRegistry.register(MockTabularTool())
-        ToolRegistry.register(MockNotesTool())
-        ToolRegistry.register(MockMIMICOnlyTool())
+        ToolRegistry.register(MockVFGhanaOnlyTool())
 
         selector = ToolSelector()
 
-        # Test with demo (has TABULAR modality)
-        demo_tools = selector.tools_for_dataset("mimic-iv-demo")
-        demo_names = {t.name for t in demo_tools}
-        assert "mock_tabular" in demo_names
-        assert "mock_mimic_only" in demo_names
-        # mock_notes not in demo_names (mimic doesn't have NOTES modality)
-
-        # Test with full (has TABULAR modality)
-        full_tools = selector.tools_for_dataset("mimic-iv")
-        full_names = {t.name for t in full_tools}
-        assert "mock_tabular" in full_names
-        assert "mock_mimic_only" in full_names
+        # Test with vf-ghana (has TABULAR modality)
+        vf_tools = selector.tools_for_dataset("vf-ghana")
+        vf_names = {t.name for t in vf_tools}
+        assert "mock_tabular" in vf_names
+        assert "mock_vf_ghana_only" in vf_names
 
     def test_tool_protocol_conformance(self):
         """Test that tools conform to the Tool protocol."""
@@ -321,13 +285,8 @@ class TestInitTools:
         assert "get_table_info" in tool_names
         assert "execute_query" in tool_names
 
-        # Notes tools
-        assert "search_notes" in tool_names
-        assert "get_note" in tool_names
-        assert "list_patient_notes" in tool_names
-
-        # Total: 8 tools (2 management + 3 tabular + 3 notes)
-        assert len(all_tools) == 8
+        # Total: 5 tools (2 management + 3 tabular)
+        assert len(all_tools) == 5
 
         # Cleanup
         reset_tools()
@@ -343,9 +302,9 @@ class TestInitTools:
         init_tools()
         init_tools()
 
-        # Should still have exactly 8 tools
+        # Should still have exactly 5 tools
         all_tools = ToolRegistry.list_all()
-        assert len(all_tools) == 8
+        assert len(all_tools) == 5
 
         reset_tools()
 
@@ -354,14 +313,14 @@ class TestInitTools:
         from oasis.core.tools import init_tools, reset_tools
 
         init_tools()
-        assert len(ToolRegistry.list_all()) == 8
+        assert len(ToolRegistry.list_all()) == 5
 
         reset_tools()
         assert len(ToolRegistry.list_all()) == 0
 
         # Can reinitialize after reset
         init_tools()
-        assert len(ToolRegistry.list_all()) == 8
+        assert len(ToolRegistry.list_all()) == 5
 
         reset_tools()
 
@@ -370,11 +329,8 @@ class TestInitTools:
         from oasis.core.tools import (
             ExecuteQueryTool,
             GetDatabaseSchemaTool,
-            GetNoteTool,
             GetTableInfoTool,
             ListDatasetsTool,
-            ListPatientNotesTool,
-            SearchNotesTool,
             SetDatasetTool,
         )
 
@@ -384,9 +340,6 @@ class TestInitTools:
             ExecuteQueryTool,
             ListDatasetsTool,
             SetDatasetTool,
-            SearchNotesTool,
-            GetNoteTool,
-            ListPatientNotesTool,
         ]
 
         for tool_class in tool_classes:
@@ -409,25 +362,18 @@ class TestInitTools:
 
         selector = ToolSelector()
 
-        # Test with demo dataset (has TABULAR modality)
-        demo_tools = selector.tools_for_dataset("mimic-iv-demo")
-        demo_names = {t.name for t in demo_tools}
+        # Test with vf-ghana dataset (has TABULAR modality)
+        vf_tools = selector.tools_for_dataset("vf-ghana")
+        vf_names = {t.name for t in vf_tools}
 
         # Management tools should always be available
-        assert "list_datasets" in demo_names
-        assert "set_dataset" in demo_names
+        assert "list_datasets" in vf_names
+        assert "set_dataset" in vf_names
 
-        # Tabular tools should be available for demo
-        assert "get_database_schema" in demo_names
-        assert "get_table_info" in demo_names
-        assert "execute_query" in demo_names
-
-        # Test with full dataset (has TABULAR modality)
-        full_tools = selector.tools_for_dataset("mimic-iv")
-        full_names = {t.name for t in full_tools}
-
-        # Should have all tools available for full dataset
-        assert len(full_names) >= len(demo_names)
+        # Tabular tools should be available for vf-ghana
+        assert "get_database_schema" in vf_names
+        assert "get_table_info" in vf_names
+        assert "execute_query" in vf_names
 
         reset_tools()
 

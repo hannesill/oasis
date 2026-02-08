@@ -31,11 +31,6 @@ from oasis.core.exceptions import OASISError
 from oasis.core.serialization import serialize_for_mcp
 from oasis.core.tools import ToolRegistry, ToolSelector, init_tools
 from oasis.core.tools.management import ListDatasetsInput, SetDatasetInput
-from oasis.core.tools.notes import (
-    GetNoteInput,
-    ListPatientNotesInput,
-    SearchNotesInput,
-)
 from oasis.core.tools.tabular import (
     ExecuteQueryInput,
     GetDatabaseSchemaInput,
@@ -60,9 +55,6 @@ _MCP_TOOL_NAMES = frozenset(
         "get_database_schema",
         "get_table_info",
         "execute_query",
-        "search_notes",
-        "get_note",
-        "list_patient_notes",
     }
 )
 
@@ -152,84 +144,6 @@ def _serialize_set_dataset_result(result: dict[str, Any]) -> str:
         status_msg += f"\nWarning: {warning}"
 
     return status_msg
-
-
-def _serialize_search_notes_result(result: dict[str, Any]) -> str:
-    """Serialize search_notes result to MCP string."""
-    backend_info = result.get("backend_info", "")
-    query = result.get("query", "")
-    snippet_length = result.get("snippet_length", 300)
-    results = result.get("results", {})
-
-    if not results or all(df.empty for df in results.values()):
-        tables = ", ".join(results.keys()) if results else "notes"
-        return f"{backend_info}\n**No matches found** for '{query}' in {tables}."
-
-    output_parts = [
-        backend_info,
-        f"**Search:** '{query}' (showing snippets of ~{snippet_length} chars)",
-    ]
-
-    for table, df in results.items():
-        if not df.empty:
-            output_parts.append(f"\n**{table.upper()}:**\n{df.to_string(index=False)}")
-
-    output_parts.append(
-        "\n**Tip:** Use `get_note(note_id)` to retrieve full text of a specific note."
-    )
-
-    return "\n".join(output_parts)
-
-
-def _serialize_get_note_result(result: dict[str, Any]) -> str:
-    """Serialize get_note result to MCP string."""
-    backend_info = result.get("backend_info", "")
-    note_id = result.get("note_id", "")
-    subject_id = result.get("subject_id", "")
-    text = result.get("text", "")
-    note_length = result.get("note_length", 0)
-    truncated = result.get("truncated", False)
-
-    parts = [backend_info, ""]
-
-    if truncated:
-        parts.append(f"**Note (truncated, original length: {note_length} chars):**")
-    else:
-        parts.append(f"**Note {note_id} (subject_id: {subject_id}):**")
-
-    parts.append(text)
-
-    if truncated:
-        parts.append("\n[...truncated...]")
-
-    return "\n".join(parts)
-
-
-def _serialize_list_patient_notes_result(result: dict[str, Any]) -> str:
-    """Serialize list_patient_notes result to MCP string."""
-    backend_info = result.get("backend_info", "")
-    subject_id = result.get("subject_id", "")
-    notes = result.get("notes", {})
-
-    if not notes or all(df.empty for df in notes.values()):
-        return f"{backend_info}\n**No notes found** for subject_id {subject_id}."
-
-    output_parts = [
-        backend_info,
-        f"**Notes for subject_id {subject_id}:**",
-    ]
-
-    for table, df in notes.items():
-        if not df.empty:
-            output_parts.append(
-                f"\n**{table.upper()} NOTES:**\n{df.to_string(index=False)}"
-            )
-
-    output_parts.append(
-        "\n**Tip:** Use `get_note(note_id)` to retrieve full text of a specific note."
-    )
-
-    return "\n".join(output_parts)
 
 
 # ==========================================
@@ -367,130 +281,6 @@ def execute_query(sql_query: str) -> str:
         result = tool.invoke(dataset, ExecuteQueryInput(sql_query=sql_query))
         # Result is a DataFrame - serialize it
         return serialize_for_mcp(result)
-    except OASISError as e:
-        return f"**Error:** {e}"
-
-
-# ==========================================
-# CLINICAL NOTES TOOLS
-# ==========================================
-
-
-@mcp.tool()
-def search_notes(
-    query: str,
-    note_type: str = "all",
-    limit: int = 5,
-    snippet_length: int = 300,
-) -> str:
-    """Search clinical notes by keyword.
-
-    Returns snippets around matches to prevent context overflow.
-    Use get_note() to retrieve full text of specific notes.
-
-    **Note types:** 'discharge' (summaries), 'radiology' (reports), or 'all'
-
-    Args:
-        query: Search term to find in notes.
-        note_type: Type of notes to search ('discharge', 'radiology', or 'all').
-        limit: Maximum number of results per note type (default: 5).
-        snippet_length: Characters of context around matches (default: 300).
-
-    Returns:
-        Matching snippets with note IDs for follow-up retrieval.
-    """
-    try:
-        dataset = DatasetRegistry.get_active()
-
-        compat_result = _tool_selector.check_compatibility("search_notes", dataset)
-        if not compat_result.compatible:
-            return compat_result.error_message
-
-        tool = ToolRegistry.get("search_notes")
-        result = tool.invoke(
-            dataset,
-            SearchNotesInput(
-                query=query,
-                note_type=note_type,
-                limit=limit,
-                snippet_length=snippet_length,
-            ),
-        )
-        return _serialize_search_notes_result(result)
-    except OASISError as e:
-        return f"**Error:** {e}"
-
-
-@mcp.tool()
-def get_note(note_id: str, max_length: int | None = None) -> str:
-    """Retrieve full text of a specific clinical note.
-
-    **Warning:** Clinical notes can be very long. Consider using
-    search_notes() first to find relevant notes, or use max_length
-    to truncate output.
-
-    Args:
-        note_id: The note ID (e.g., from search_notes or list_patient_notes).
-        max_length: Optional maximum characters to return (truncates if exceeded).
-
-    Returns:
-        Full note text, or truncated version if max_length specified.
-    """
-    try:
-        dataset = DatasetRegistry.get_active()
-
-        compat_result = _tool_selector.check_compatibility("get_note", dataset)
-        if not compat_result.compatible:
-            return compat_result.error_message
-
-        tool = ToolRegistry.get("get_note")
-        result = tool.invoke(
-            dataset,
-            GetNoteInput(note_id=note_id, max_length=max_length),
-        )
-        return _serialize_get_note_result(result)
-    except OASISError as e:
-        return f"**Error:** {e}"
-
-
-@mcp.tool()
-def list_patient_notes(
-    subject_id: int,
-    note_type: str = "all",
-    limit: int = 20,
-) -> str:
-    """List available clinical notes for a patient.
-
-    Returns note metadata (IDs, types, lengths) without full text.
-    Use get_note(note_id) to retrieve specific notes.
-
-    Args:
-        subject_id: Patient identifier.
-        note_type: Type of notes to list ('discharge', 'radiology', or 'all').
-        limit: Maximum notes to return (default: 20).
-
-    Returns:
-        List of available notes with metadata for the patient.
-    """
-    try:
-        dataset = DatasetRegistry.get_active()
-
-        compat_result = _tool_selector.check_compatibility(
-            "list_patient_notes", dataset
-        )
-        if not compat_result.compatible:
-            return compat_result.error_message
-
-        tool = ToolRegistry.get("list_patient_notes")
-        result = tool.invoke(
-            dataset,
-            ListPatientNotesInput(
-                subject_id=subject_id,
-                note_type=note_type,
-                limit=limit,
-            ),
-        )
-        return _serialize_list_patient_notes_result(result)
     except OASISError as e:
         return f"**Error:** {e}"
 

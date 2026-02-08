@@ -19,7 +19,7 @@ maintainers = [
 ]
 readme = "README.md"
 license = "MIT"
-keywords = ["mimic-iv", "clinical-data", "mcp", "llm", "medical", "healthcare", "duckdb", "bigquery"]
+keywords = ["healthcare", "mcp", "llm", "medical", "duckdb", "ghana", "medical-deserts"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
@@ -103,10 +103,7 @@ known-first-party = ["oasis"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-addopts = "-m 'not requires_mimic_iv'"
-markers = [
-    "requires_mimic_iv: test requires local MIMIC-IV data (run with: uv run pytest -m requires_mimic_iv)",
-]
+markers = []
 # Filter out Jupyter deprecation warning
 filterwarnings = [
     "ignore::DeprecationWarning:jupyter_client.*",

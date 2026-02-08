@@ -98,14 +98,14 @@ class TestModalityErrorAttributes:
         """ModalityError stores tool name and modality sets."""
         err = ModalityError(
             "Incompatible",
-            tool_name="search_notes",
-            required_modalities={"NOTES"},
-            available_modalities={"TABULAR"},
+            tool_name="execute_query",
+            required_modalities={"TABULAR"},
+            available_modalities=set(),
         )
         assert str(err) == "Incompatible"
-        assert err.tool_name == "search_notes"
-        assert err.required_modalities == {"NOTES"}
-        assert err.available_modalities == {"TABULAR"}
+        assert err.tool_name == "execute_query"
+        assert err.required_modalities == {"TABULAR"}
+        assert err.available_modalities == set()
 
     def test_defaults(self):
         """ModalityError defaults modality sets to empty."""
@@ -133,18 +133,18 @@ class TestBackendErrorAttributes:
 
     def test_table_not_found_auto_message(self):
         """TableNotFoundError auto-generates message from table name."""
-        err = TableNotFoundError("mimiciv_hosp.patients", backend="duckdb")
-        assert "mimiciv_hosp.patients" in str(err)
-        assert err.table_name == "mimiciv_hosp.patients"
+        err = TableNotFoundError("vf.facilities", backend="duckdb")
+        assert "vf.facilities" in str(err)
+        assert err.table_name == "vf.facilities"
         assert err.recoverable is False
 
     def test_query_execution_error_stores_sql(self):
         """QueryExecutionError stores the failed SQL."""
         err = QueryExecutionError(
-            "Syntax error", sql="SELECT * FORM t", backend="bigquery"
+            "Syntax error", sql="SELECT * FORM t", backend="duckdb"
         )
         assert err.sql == "SELECT * FORM t"
-        assert err.backend == "bigquery"
+        assert err.backend == "duckdb"
         assert err.recoverable is False
 
 

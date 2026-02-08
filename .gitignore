@@ -57,11 +57,8 @@ junit.xml
 *.tmp
 *.swp
 
-# Local database files
-# alright for hackathon
-
-# Configuration files
-# alright for hackathon
+# OASIS generated data (recreated via `oasis init`)
+oasis_data/
 
 # Operating System specific files
 .DS_Store
@@ -80,3 +77,5 @@ notes/
 
 # Node.js
 node_modules/
+
+.mystuff/

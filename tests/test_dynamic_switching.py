@@ -42,29 +42,21 @@ def test_dynamic_dataset_switching(tmp_path, monkeypatch):
     with pytest.raises(DatasetError):
         DatasetRegistry.get_active()
 
-    # 2. Set active dataset to something else (simulating 'oasis use')
-    set_active_dataset("mimic-iv")
+    # 2. Set active dataset to vf-ghana
+    set_active_dataset("vf-ghana")
 
     # Verify config file was written
     assert (data_dir / "config.json").exists()
 
     # Verify DatasetRegistry.get_active() picks it up
     ds_def = DatasetRegistry.get_active()
-    assert ds_def.name == "mimic-iv"
+    assert ds_def.name == "vf-ghana"
 
     # Verify get_active_dataset reflects the change
-    assert get_active_dataset() == "mimic-iv"
+    assert get_active_dataset() == "vf-ghana"
 
     # 3. Verify dataset definition has correct properties
-    full_ds = DatasetRegistry.get("mimic-iv")
+    full_ds = DatasetRegistry.get("vf-ghana")
     assert full_ds is not None
-    assert full_ds.requires_authentication is True
-
-    demo_ds = DatasetRegistry.get("mimic-iv-demo")
-    assert demo_ds is not None
-    assert demo_ds.requires_authentication is False
-
-    # 4. Switch back to demo
-    set_active_dataset("mimic-iv-demo")
-    ds_def = DatasetRegistry.get_active()
-    assert ds_def.name == "mimic-iv-demo"
+    assert full_ds.description == "Virtue Foundation Ghana Healthcare Facilities"
+    assert full_ds.primary_verification_table == "vf.facilities"

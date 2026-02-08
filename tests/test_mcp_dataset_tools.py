@@ -21,17 +21,11 @@ class TestMCPDatasetTools:
     async def test_list_datasets(self):
         """Test list_datasets tool."""
         mock_availability = {
-            "mimic-iv-demo": {
+            "vf-ghana": {
                 "parquet_present": True,
                 "db_present": True,
-                "parquet_root": "/tmp/demo_parquet",
-                "db_path": "/tmp/demo.duckdb",
-            },
-            "mimic-iv": {
-                "parquet_present": False,
-                "db_present": False,
-                "parquet_root": "/tmp/full_parquet",
-                "db_path": "",
+                "parquet_root": "/tmp/vf_ghana_parquet",
+                "db_path": "/tmp/vf_ghana.duckdb",
             },
         }
 
@@ -42,18 +36,17 @@ class TestMCPDatasetTools:
         ):
             with patch(
                 "oasis.core.tools.management.get_active_dataset",
-                return_value="mimic-iv-demo",
+                return_value="vf-ghana",
             ):
                 with patch(
                     "oasis.config.get_active_dataset",
-                    return_value="mimic-iv-demo",
+                    return_value="vf-ghana",
                 ):
                     with patch(
                         "oasis.core.tools.management.DatasetRegistry.get"
                     ) as mock_get:
                         # Mock ds_def
                         mock_ds = Mock()
-                        mock_ds.bigquery_dataset_ids = []
                         mock_ds.modalities = frozenset()
                         mock_get.return_value = mock_ds
 
@@ -61,17 +54,15 @@ class TestMCPDatasetTools:
                             result = await client.call_tool("list_datasets", {})
                             result_text = str(result)
 
-                        assert "Active dataset: mimic-iv-demo" in result_text
-                        assert "=== MIMIC-IV-DEMO (Active) ===" in result_text
-                        assert "=== MIMIC-IV ===" in result_text
-                        assert "Local Database: ✅" in result_text
-                        assert "Local Database: ❌" in result_text
+                        assert "Active dataset: vf-ghana" in result_text
+                        assert "=== VF-GHANA (Active) ===" in result_text
+                        assert "Local Database: +" in result_text
 
     @pytest.mark.asyncio
     async def test_set_dataset_success(self):
         """Test set_dataset tool with valid dataset."""
         mock_availability = {
-            "mimic-iv-demo": {"parquet_present": True, "db_present": True}
+            "vf-ghana": {"parquet_present": True, "db_present": True}
         }
 
         with patch(
@@ -80,25 +71,25 @@ class TestMCPDatasetTools:
         ):
             with patch("oasis.core.tools.management.set_active_dataset") as mock_set:
                 with patch(
-                    "oasis.config.get_active_dataset", return_value="mimic-iv-demo"
+                    "oasis.config.get_active_dataset", return_value="vf-ghana"
                 ):
                     with patch("oasis.core.tools.management.DatasetRegistry.get"):
                         async with Client(mcp) as client:
                             result = await client.call_tool(
-                                "set_dataset", {"dataset_name": "mimic-iv-demo"}
+                                "set_dataset", {"dataset_name": "vf-ghana"}
                             )
                             result_text = str(result)
 
                             assert (
-                                "Active dataset switched to 'mimic-iv-demo'"
+                                "Active dataset switched to 'vf-ghana'"
                                 in result_text
                             )
-                            mock_set.assert_called_once_with("mimic-iv-demo")
+                            mock_set.assert_called_once_with("vf-ghana")
 
     @pytest.mark.asyncio
     async def test_set_dataset_invalid(self):
         """Test set_dataset tool with invalid dataset."""
-        mock_availability = {"mimic-iv-demo": {}}
+        mock_availability = {"vf-ghana": {}}
 
         with patch(
             "oasis.core.tools.management.detect_available_local_datasets",
@@ -106,7 +97,7 @@ class TestMCPDatasetTools:
         ):
             with patch("oasis.core.tools.management.set_active_dataset") as mock_set:
                 with patch(
-                    "oasis.config.get_active_dataset", return_value="mimic-iv-demo"
+                    "oasis.config.get_active_dataset", return_value="vf-ghana"
                 ):
                     with patch("oasis.core.tools.management.DatasetRegistry.get"):
                         async with Client(mcp) as client:

@@ -49,23 +49,23 @@ OASIS uses canonical `schema.table` names (e.g., `vf.facilities`) that work with
 ```json
 {
   "schema_mapping": {
-    "hosp": "mimiciv_hosp",
-    "icu": "mimiciv_icu"
-  }
-}
-```
-
-For datasets where all files are in the root directory (no subdirectories), use an empty string key:
-
-```json
-{
-  "schema_mapping": {
     "": "vf"
   }
 }
 ```
 
 With this, a file `facilities.csv` becomes queryable as `vf.facilities`.
+
+For datasets with subdirectories, map each subdirectory to a schema name:
+
+```json
+{
+  "schema_mapping": {
+    "hospitals": "gh_hospitals",
+    "clinics": "gh_clinics"
+  }
+}
+```
 
 Custom datasets without `schema_mapping` still work — tables will be created with flat names in the `main` schema.
 

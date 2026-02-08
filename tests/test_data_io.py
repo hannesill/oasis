@@ -98,25 +98,24 @@ def _write_gz_csv(path, text):
 
 
 def test_convert_csv_to_parquet_and_init_duckdb(tmp_path, monkeypatch):
-    # Prepare a minimal CSV.gz under hosp/
+    # Prepare a minimal CSV.gz (root-level for vf-ghana style)
     src_root = tmp_path / "src"
-    hosp_dir = src_root / "hosp"
-    hosp_dir.mkdir(parents=True, exist_ok=True)
-    csv_gz = hosp_dir / "sample.csv.gz"
+    src_root.mkdir(parents=True, exist_ok=True)
+    csv_gz = src_root / "facilities.csv.gz"
 
     _write_gz_csv(
         csv_gz,
-        "col1,col2\n"  # header
-        "1,foo\n"
-        "2,bar\n",
+        "pk_unique_id,name\n"  # header
+        "1,Tamale Teaching Hospital\n"
+        "2,Korle Bu Teaching Hospital\n",
     )
 
     # Convert to Parquet under dst root
     dst_root = tmp_path / "parquet"
-    ok = convert_csv_to_parquet("mimic-iv-demo", src_root, dst_root)
+    ok = convert_csv_to_parquet("vf-ghana", src_root, dst_root)
     assert ok  # conversion succeeded
 
-    out_parquet = dst_root / "hosp" / "sample.parquet"
+    out_parquet = dst_root / "facilities.parquet"
     assert out_parquet.exists()  # parquet file created
 
     # Quick verify via DuckDB
@@ -130,17 +129,17 @@ def test_convert_csv_to_parquet_and_init_duckdb(tmp_path, monkeypatch):
     assert cnt == 2  # two data rows
 
     # Initialize DuckDB views, patching the parquet root resolver.
-    # mimic-iv-demo has schema_mapping {"hosp": "mimiciv_hosp", "icu": "mimiciv_icu"},
-    # so views are schema-qualified: mimiciv_hosp.sample
+    # vf-ghana has schema_mapping {"": "vf"},
+    # so views are schema-qualified: vf.facilities
     db_path = tmp_path / "test.duckdb"
     with mock.patch("oasis.data_io.get_dataset_parquet_root", return_value=dst_root):
-        init_ok = init_duckdb_from_parquet("mimic-iv-demo", db_path)
+        init_ok = init_duckdb_from_parquet("vf-ghana", db_path)
     assert init_ok  # views created
 
     # Query the schema-qualified view
     con = duckdb.connect(str(db_path))
     try:
-        cnt = con.execute("SELECT COUNT(*) FROM mimiciv_hosp.sample").fetchone()[0]
+        cnt = con.execute("SELECT COUNT(*) FROM vf.facilities").fetchone()[0]
     finally:
         con.close()
     assert cnt == 2
@@ -168,115 +167,56 @@ def _create_parquet(directory, filename, csv_text):
     return parquet_path
 
 
-def test_schema_mapping_hosp_and_icu(tmp_path):
-    """Parquet files in hosp/ and icu/ with schema_mapping produce
+def test_schema_mapping_root_level(tmp_path):
+    """Root-level parquet files with {"": "vf"} mapping produce
+    vf.table views (VF Ghana style)."""
+    parquet_root = tmp_path / "parquet"
+    _create_parquet(
+        parquet_root, "facilities", "pk_unique_id,name\n1,Hospital A\n2,Hospital B\n"
+    )
+
+    db_path = tmp_path / "test.duckdb"
+    mapping = {"": "vf"}
+    ok = _create_duckdb_with_views(db_path, parquet_root, schema_mapping=mapping)
+    assert ok
+
+    con = duckdb.connect(str(db_path))
+    try:
+        cnt = con.execute("SELECT COUNT(*) FROM vf.facilities").fetchone()[0]
+        assert cnt == 2
+    finally:
+        con.close()
+
+
+def test_schema_mapping_subdirectory(tmp_path):
+    """Parquet files in subdirectories with schema_mapping produce
     schema-qualified DuckDB views."""
     parquet_root = tmp_path / "parquet"
     _create_parquet(
-        parquet_root / "hosp", "admissions", "subject_id,hadm_id\n1,100\n2,200\n"
-    )
-    _create_parquet(
-        parquet_root / "icu", "icustays", "subject_id,stay_id\n1,10\n2,20\n"
+        parquet_root / "data",
+        "facilities",
+        "pk_unique_id,name\n1,Hospital A\n2,Hospital B\n",
     )
 
     db_path = tmp_path / "test.duckdb"
-    mapping = {"hosp": "mimiciv_hosp", "icu": "mimiciv_icu"}
+    mapping = {"data": "vf"}
     ok = _create_duckdb_with_views(db_path, parquet_root, schema_mapping=mapping)
     assert ok
 
     con = duckdb.connect(str(db_path))
     try:
-        # Schemas exist
+        # Schema exists
         schemas = [
             r[0]
             for r in con.execute(
                 "SELECT schema_name FROM information_schema.schemata"
             ).fetchall()
         ]
-        assert "mimiciv_hosp" in schemas
-        assert "mimiciv_icu" in schemas
+        assert "vf" in schemas
 
-        # Views are schema-qualified
-        cnt = con.execute("SELECT COUNT(*) FROM mimiciv_hosp.admissions").fetchone()[0]
+        # View is schema-qualified
+        cnt = con.execute("SELECT COUNT(*) FROM vf.facilities").fetchone()[0]
         assert cnt == 2
-        cnt = con.execute("SELECT COUNT(*) FROM mimiciv_icu.icustays").fetchone()[0]
-        assert cnt == 2
-    finally:
-        con.close()
-
-
-def test_schema_mapping_root_level(tmp_path):
-    """Root-level parquet files with {"": "eicu_crd"} mapping produce
-    eicu_crd.table views."""
-    parquet_root = tmp_path / "parquet"
-    _create_parquet(parquet_root, "patient", "patientunitstayid,age\n1,65\n2,42\n")
-
-    db_path = tmp_path / "test.duckdb"
-    mapping = {"": "eicu_crd"}
-    ok = _create_duckdb_with_views(db_path, parquet_root, schema_mapping=mapping)
-    assert ok
-
-    con = duckdb.connect(str(db_path))
-    try:
-        cnt = con.execute("SELECT COUNT(*) FROM eicu_crd.patient").fetchone()[0]
-        assert cnt == 2
-    finally:
-        con.close()
-
-
-def test_schema_mapping_flat_files_single_schema_fallback(tmp_path):
-    """Flat parquet files with a single-schema mapping (e.g. mimic-iv-note
-    with {"note": "mimiciv_note"}) should fall back to that schema."""
-    parquet_root = tmp_path / "parquet"
-    _create_parquet(parquet_root, "discharge", "subject_id,note\n1,text\n2,more\n")
-    _create_parquet(parquet_root, "radiology", "subject_id,note\n3,xray\n")
-
-    db_path = tmp_path / "test.duckdb"
-    mapping = {"note": "mimiciv_note"}
-    ok = _create_duckdb_with_views(db_path, parquet_root, schema_mapping=mapping)
-    assert ok
-
-    con = duckdb.connect(str(db_path))
-    try:
-        cnt = con.execute("SELECT COUNT(*) FROM mimiciv_note.discharge").fetchone()[0]
-        assert cnt == 2
-        cnt = con.execute("SELECT COUNT(*) FROM mimiciv_note.radiology").fetchone()[0]
-        assert cnt == 1
-    finally:
-        con.close()
-
-
-def test_mimiciv_derived_schema_not_created_during_init(tmp_path):
-    """The mimiciv_derived schema should NOT be created during normal init.
-    It is created by oasis init-derived (materializer.py) when needed."""
-    parquet_root = tmp_path / "parquet"
-    _create_parquet(
-        parquet_root / "hosp", "admissions", "subject_id,hadm_id\n1,100\n2,200\n"
-    )
-    _create_parquet(
-        parquet_root / "icu", "icustays", "subject_id,stay_id\n1,10\n2,20\n"
-    )
-
-    db_path = tmp_path / "test.duckdb"
-    mapping = {
-        "hosp": "mimiciv_hosp",
-        "icu": "mimiciv_icu",
-        "derived": "mimiciv_derived",
-    }
-    ok = _create_duckdb_with_views(db_path, parquet_root, schema_mapping=mapping)
-    assert ok
-
-    con = duckdb.connect(str(db_path))
-    try:
-        schemas = [
-            r[0]
-            for r in con.execute(
-                "SELECT schema_name FROM information_schema.schemata"
-            ).fetchall()
-        ]
-        assert "mimiciv_hosp" in schemas
-        assert "mimiciv_icu" in schemas
-        assert "mimiciv_derived" not in schemas
     finally:
         con.close()
 
@@ -284,7 +224,11 @@ def test_mimiciv_derived_schema_not_created_during_init(tmp_path):
 def test_no_schema_mapping_flat_naming(tmp_path):
     """Without schema_mapping, views use flat naming (backward compat)."""
     parquet_root = tmp_path / "parquet"
-    _create_parquet(parquet_root / "hosp", "admissions", "subject_id,hadm_id\n1,100\n")
+    _create_parquet(
+        parquet_root / "data",
+        "facilities",
+        "pk_unique_id,name\n1,Hospital A\n",
+    )
 
     db_path = tmp_path / "test.duckdb"
     ok = _create_duckdb_with_views(db_path, parquet_root, schema_mapping=None)
@@ -292,14 +236,14 @@ def test_no_schema_mapping_flat_naming(tmp_path):
 
     con = duckdb.connect(str(db_path))
     try:
-        cnt = con.execute("SELECT COUNT(*) FROM hosp_admissions").fetchone()[0]
+        cnt = con.execute("SELECT COUNT(*) FROM data_facilities").fetchone()[0]
         assert cnt == 1
     finally:
         con.close()
 
 
 # ------------------------------------------------------------
-# Round-trip integration test: parquet → DuckDB → backend API
+# Round-trip integration test: parquet -> DuckDB -> backend API
 # ------------------------------------------------------------
 
 
@@ -309,17 +253,12 @@ def test_roundtrip_parquet_to_backend_api(tmp_path):
     all work through the DuckDBBackend API."""
     parquet_root = tmp_path / "parquet"
     _create_parquet(
-        parquet_root / "hosp",
-        "patients",
-        "subject_id,gender,anchor_age\n1,M,65\n2,F,42\n",
-    )
-    _create_parquet(
-        parquet_root / "icu",
-        "icustays",
-        "subject_id,stay_id\n1,10\n2,20\n",
+        parquet_root,
+        "facilities",
+        "pk_unique_id,name,number_beds\n1,Tamale Teaching Hospital,200\n2,Korle Bu Teaching Hospital,1600\n",
     )
 
-    mapping = {"hosp": "mimiciv_hosp", "icu": "mimiciv_icu"}
+    mapping = {"": "vf"}
     db_path = tmp_path / "roundtrip.duckdb"
     ok = _create_duckdb_with_views(db_path, parquet_root, schema_mapping=mapping)
     assert ok
@@ -333,18 +272,17 @@ def test_roundtrip_parquet_to_backend_api(tmp_path):
 
     # get_table_list returns schema-qualified names
     tables = backend.get_table_list(ds)
-    assert "mimiciv_hosp.patients" in tables
-    assert "mimiciv_icu.icustays" in tables
+    assert "vf.facilities" in tables
 
     # get_table_info works for schema-qualified names
-    info = backend.get_table_info("mimiciv_hosp.patients", ds)
+    info = backend.get_table_info("vf.facilities", ds)
     assert info.success is True
     col_names = info.dataframe["name"].tolist()
-    assert "subject_id" in col_names
-    assert "gender" in col_names
+    assert "pk_unique_id" in col_names
+    assert "name" in col_names
 
     # get_sample_data works for schema-qualified names
-    sample = backend.get_sample_data("mimiciv_hosp.patients", ds, limit=1)
+    sample = backend.get_sample_data("vf.facilities", ds, limit=1)
     assert sample.success is True
     assert sample.row_count <= 1
-    assert "subject_id" in sample.dataframe.columns
+    assert "pk_unique_id" in sample.dataframe.columns
