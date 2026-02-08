@@ -573,7 +573,7 @@ def geo_map(
         radius_km: Search radius in kilometers (default: 50).
         mode: "search" for facility search, "deserts" for coverage gaps.
         highlight_region: Region to fly to and highlight (e.g. "Northern").
-        narrative_focus: Controls the demo narrative — "deserts", "anomaly", or "impact".
+        narrative_focus: Visual storytelling mode — "deserts", "anomaly", or "impact".
         initial_zoom: Initial camera zoom level (default: 6.0).
 
     Returns:

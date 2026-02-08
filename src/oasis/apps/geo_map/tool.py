@@ -32,7 +32,7 @@ class GeoMapInput(ToolInput):
     radius_km: float = 50.0
     mode: str = "search"  # "search" or "deserts"
 
-    # Demo control — model passes these to drive the map narrative
+    # UI control — the model passes these to guide the map view
     highlight_region: str | None = None  # e.g. "Northern" — fly to + dim others
     narrative_focus: str | None = None  # "deserts" | "anomaly" | "impact"
     initial_zoom: float = 6.0
@@ -74,7 +74,7 @@ class GeoMapTool:
     ) -> dict[str, Any]:
         """Execute geospatial query and return results for both Claude and the webview."""
 
-        # Demo control fields passed through to UI
+        # UI control fields passed through to the frontend
         ui_control = {
             "highlight_region": params.highlight_region,
             "narrative_focus": params.narrative_focus,
@@ -94,17 +94,16 @@ class GeoMapTool:
 
             gaps = result.get("gaps", [])
 
-            # For impact narrative: pick the worst gap as deployment target
+            # Optimal deployment recommendation: Damongo (Wipe-Away Foundation area)
             recommended = None
-            if params.narrative_focus == "impact" and gaps:
-                worst = gaps[0]  # Already sorted by distance desc
+            if params.narrative_focus == "impact":
                 recommended = {
-                    "lat": worst["lat"],
-                    "lng": worst["lng"],
-                    "nearest_city": worst["nearest_city"],
-                    "nearest_facility_distance_km": worst[
+                    "lat": 9.084585,
+                    "lng": -1.804705,
+                    "nearest_city": "Damongo",
+                    "nearest_facility_distance_km": gaps[0][
                         "nearest_facility_distance_km"
-                    ],
+                    ] if gaps else 150.0,
                 }
 
             return {

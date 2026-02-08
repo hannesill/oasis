@@ -85,8 +85,8 @@ const REGION_COORDS: Record<string, [number, number]> = {
 function $(id: string): HTMLElement { return document.getElementById(id)!; }
 function fmtSpec(s: string): string { return s.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()).trim(); }
 
-function showApiStatus(msg: string, ok: boolean): void {
-  console.log(`[OASIS] ${ok ? '✅' : '⚠️'} ${msg}`);
+function showApiStatus(_msg: string, _ok: boolean): void {
+  // Status messages are used internally for flow control
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -259,7 +259,6 @@ function generateAllIsochrones(radioFacs: Array<{ lng: number; lat: number; id: 
 async function callTool(name: string, args: Record<string, unknown>): Promise<any> {
   // Dev mode: return mock data instead of calling MCP
   if (isDevMode()) {
-    console.log(`[DEV] Mock callTool: ${name}`, args);
     if (name === 'geocode_facilities') return getMockGeocodeFacilities();
     return {};
   }
@@ -309,7 +308,6 @@ function initMap(): void {
   });
 
   map.on('error', (e: any) => {
-    console.error('Mapbox error:', e.error || e);
     $('loader').classList.add('gone');
     showApiStatus('Map error: ' + (e.error?.message || 'unknown'), false);
   });
@@ -318,37 +316,26 @@ function initMap(): void {
     map.addSource('mapbox-dem', { type: 'raster-dem', url: 'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize: 512, maxzoom: 14 });
     map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 });
 
-    // Intro animation — fires immediately, never blocked by data loading
+    // Intro animation — fly to tool-specified target, or default Northern Ghana
     setTimeout(() => {
       $('loader').classList.add('gone');
-      // Phase 1: Globe → West Africa overview (2.5s)
+      const target = resolveToolCameraTarget();
       map.flyTo({
-        center: [-1.0, 8.0],
-        zoom: 4.5,
-        pitch: 0,
-        bearing: 0,
-        duration: 2500,
+        center: target ? target.center : [-0.9057, 9.5439],
+        zoom: target ? target.zoom : 8,
+        pitch: target ? target.pitch : 50,
+        bearing: -15,
+        duration: 3000,
         essential: true,
       });
-      // Phase 2: West Africa → Northern Ghana with cinematic tilt (2.5s)
-      setTimeout(() => {
-        map.flyTo({
-          center: [-0.9057, 9.5439],
-          zoom: 8,
-          pitch: 50,
-          bearing: -15,
-          duration: 2500,
-          essential: true,
-        });
-      }, 2700);
-    }, 600);
+    }, 400);
 
     // Load facilities in parallel — layers appear once data is ready
     const dataReady = loadFacilitiesViaMCP().then(() => { addMapLayers(); });
 
-    // Apply tool data after Phase 2 lands AND data is loaded
-    const phase2Done = new Promise(resolve => setTimeout(resolve, 5400));
-    Promise.all([dataReady, phase2Done]).then(() => { applyToolData(); });
+    // Apply tool data after fly-in lands AND data is loaded
+    const flyDone = new Promise(resolve => setTimeout(resolve, 3600));
+    Promise.all([dataReady, flyDone]).then(() => { applyToolData(); });
   });
 
   // Timeout fallback — don't leave user stuck on loader forever
@@ -374,7 +361,6 @@ async function loadFacilitiesViaMCP(): Promise<void> {
 
     showApiStatus(`Loaded ${facilitiesGeoJSON.features.length} facilities`, true);
   } catch (err: any) {
-    console.error('Failed to load facilities via MCP:', err);
     showApiStatus('Failed to load facilities: ' + err.message, false);
   }
 }
@@ -576,7 +562,6 @@ function renderDesertGaps(gaps: any[], skipFitBounds = false): void {
  * Used for narrative_focus="impact" to show where a surgical team should go.
  */
 function renderDeploymentMarker(dep: { lat: number; lng: number; nearest_city: string; nearest_facility_distance_km: number }): void {
-  console.log('[OASIS] renderDeploymentMarker:', dep);
 
   // Clean up previous deployment layers
   if (map.getLayer('deploy-pulse-outer')) map.removeLayer('deploy-pulse-outer');
@@ -662,7 +647,6 @@ function renderDeploymentMarker(dep: { lat: number; lng: number; nearest_city: s
  */
 function applyRegionHighlight(region: string): void {
   const regionLower = region.toLowerCase();
-  console.log('[OASIS] applyRegionHighlight:', regionLower);
 
   // Substring match: check if region property contains the highlight string
   // Handles both "Northern" and "Northern Region" style values
@@ -690,7 +674,6 @@ function applyRegionHighlight(region: string): void {
 function renderDesertHeatmap(): void {
   if (!facilitiesGeoJSON || desertLayersRendered) return;
   const radioFacs = filterRadiologyFacilities(facilitiesGeoJSON);
-  console.log(`[OASIS] Found ${radioFacs.length} radiology-capable facilities`);
   if (radioFacs.length === 0) return;
 
   // Tag each facility with _isRadiology for marker styling
@@ -867,9 +850,10 @@ function stopDesertPulse(): void {
 
 function toggleDesertMode(active: boolean): void {
   desertModeActive = active;
+  $('desert-legend').classList.toggle('show', active);
   if (active) {
     if (!desertLayersRendered) renderDesertHeatmap();
-    if (!desertLayersRendered) return; // no radiology facilities found
+    if (!desertLayersRendered) { $('desert-legend').classList.remove('show'); return; } // no radiology facilities found
 
     // Reset opacities for animation
     map.setPaintProperty('layer-desert-heatmap', 'heatmap-opacity', 0);
@@ -915,20 +899,99 @@ function toggleDesertMode(active: boolean): void {
 // ═══════════════════════════════════════════════════════════════
 // DETAIL CARD + 3D MODEL + NARRATION
 // ═══════════════════════════════════════════════════════════════
+function emptyLabel(val: any): string {
+  if (val === null || val === undefined || val === '' || val === 'NaN' || val === 'nan' || val === 'None' || val === 'null') return 'Not existing';
+  const s = String(val).trim();
+  return s.length === 0 ? 'Not existing' : s;
+}
+
+function setInfoVal(id: string, val: any): void {
+  const el = $(id);
+  const display = emptyLabel(val);
+  el.textContent = display;
+  el.classList.toggle('empty', display === 'Not existing');
+}
+
+function parseJsonArray(raw: any): string[] {
+  if (!raw || raw === '' || raw === 'null' || raw === 'None') return [];
+  try {
+    const arr = typeof raw === 'string' ? JSON.parse(raw) : Array.isArray(raw) ? raw : [raw];
+    return arr.filter(Boolean).map((s: any) => String(s).trim()).filter((s: string) => s.length > 0);
+  } catch { return []; }
+}
+
+function renderChips(containerId: string, countId: string, items: string[], chipClass: string, limit: number = 15): void {
+  $(countId).textContent = String(items.length);
+  const html = items.length > 0
+    ? items.slice(0, limit).map(c => `<span class="cap-chip ${chipClass}">${c}</span>`).join('')
+      + (items.length > limit ? `<span class="cap-chip ${chipClass}">+${items.length - limit}</span>` : '')
+    : '<span class="cap-chip empty-tag">Not existing</span>';
+  $(containerId).innerHTML = html;
+}
+
+function formatPhone(raw: any): string {
+  if (!raw || raw === '' || raw === 'null' || raw === 'None') return '';
+  try {
+    const arr = typeof raw === 'string' ? JSON.parse(raw) : Array.isArray(raw) ? raw : [raw];
+    const phones = arr.filter(Boolean).map((s: any) => String(s).trim()).filter((s: string) => s.length > 0);
+    return phones.length > 0 ? phones[0] : '';
+  } catch {
+    return String(raw).trim();
+  }
+}
+
 function showDetail(props: any, lngLat: any): void {
+  // Header
   $('d-name').textContent = props.name || '—';
   $('d-type').textContent = props.facility_type || 'Facility';
 
-  let specs: string[] = [];
-  try { specs = JSON.parse(props.specialties || '[]'); } catch (e) { /* ignore */ }
-  $('d-specs').textContent = String(specs.length);
+  // Operator type badge
+  const opEl = $('d-operator');
+  const opType = emptyLabel(props.operator_type);
+  if (opType !== 'Not existing') {
+    opEl.textContent = opType;
+    opEl.style.display = '';
+  } else {
+    opEl.style.display = 'none';
+  }
+
+  // Stats
+  const specsCount = parseJsonArray(props.specialties).length;
+  $('d-specs-total').textContent = specsCount > 0 ? String(specsCount) : '—';
   $('d-dist').textContent = props.distance != null ? props.distance.toFixed(1) + ' km' : '—';
   $('d-city').textContent = props.city || '—';
 
-  let equip: string[] = [];
-  try { equip = JSON.parse(props.equipment || '[]').filter(Boolean); } catch (e) { /* ignore */ }
-  const chips = [...specs.map(fmtSpec), ...equip];
-  $('d-caps').innerHTML = chips.slice(0, 12).map(c => `<span class="cap-chip">${c}</span>`).join('') + (chips.length > 12 ? `<span class="cap-chip">+${chips.length - 12}</span>` : '');
+  // Info rows
+  setInfoVal('d-region', props.region);
+  setInfoVal('d-address', props.address);
+  setInfoVal('d-phone', formatPhone(props.phone));
+  setInfoVal('d-year', props.year_established);
+
+  // Description
+  const desc = emptyLabel(props.description);
+  const descSection = $('d-desc-section');
+  if (desc !== 'Not existing') {
+    $('d-desc').textContent = desc.length > 200 ? desc.slice(0, 200) + '...' : desc;
+    descSection.style.display = '';
+  } else {
+    descSection.style.display = 'none';
+  }
+
+  // Specialties (cyan tags)
+  const specs = parseJsonArray(props.specialties);
+  renderChips('d-specs', 'd-specs-count', specs.map(fmtSpec), 'spec');
+
+  // Procedures (green tags)
+  const procs = parseJsonArray(props.procedures);
+  renderChips('d-procs', 'd-procs-count', procs, 'proc');
+
+  // Equipment (yellow tags)
+  const equip = parseJsonArray(props.equipment);
+  renderChips('d-equip', 'd-equip-count', equip, 'equip');
+
+  // Capabilities (purple tags)
+  const caps = parseJsonArray(props.capability);
+  renderChips('d-caps', 'd-caps-count', caps, 'capab');
 
   $('detail-card').classList.add('show');
 
@@ -1094,8 +1157,8 @@ async function narrateFacility(props: any): Promise<void> {
       audioElement = new Audio(URL.createObjectURL(audioBlob));
       audioElement.play();
     }
-  } catch (err) {
-    console.error('ElevenLabs narration error:', err);
+  } catch {
+    // Narration unavailable — continue silently
   }
 }
 
@@ -1122,26 +1185,22 @@ function applyHostContext(ctx: McpUiHostContext): void {
  */
 function resolveToolCameraTarget(): { center: [number, number]; zoom: number; pitch: number } | null {
   if (!pendingToolData) {
-    console.log('[OASIS] resolveToolCameraTarget: no pendingToolData');
     return null;
   }
 
   const data = pendingToolData;
   const initialZoom = data.initial_zoom || 6.0;
-  console.log('[OASIS] resolveToolCameraTarget:', { highlight_region: data.highlight_region, initial_zoom: initialZoom, mode: data.mode });
 
   // Priority 0: impact mode with recommended deployment — zoom to that point
   if (data.narrative_focus === 'impact' && data.recommended_deployment) {
     const dep = data.recommended_deployment;
-    console.log('[OASIS] impact mode — targeting deployment point:', dep);
-    return { center: [dep.lng, dep.lat], zoom: Math.max(initialZoom, 9), pitch: 55 };
+    return { center: [dep.lng, dep.lat], zoom: 13, pitch: 55 };
   }
 
   // Priority 1: explicit highlight_region
   if (data.highlight_region) {
     const regionKey = data.highlight_region.toLowerCase();
     const coords = REGION_COORDS[regionKey];
-    console.log('[OASIS] highlight_region lookup:', regionKey, '→', coords);
     if (coords) {
       return { center: coords, zoom: initialZoom, pitch: 45 };
     }
@@ -1173,7 +1232,6 @@ function applyToolData(): void {
   pendingToolData = null;
 
   const hasHighlightRegion = !!data.highlight_region;
-  console.log('[OASIS] applyToolData:', { mode: data.mode, hasHighlightRegion, highlight_region: data.highlight_region, gaps: data.gaps?.length });
 
   // -- Region highlighting: dim facilities outside the target region --
   if (hasHighlightRegion) {
@@ -1182,6 +1240,11 @@ function applyToolData(): void {
 
   // -- Desert mode: render heatmap + gap circles --
   if (data.mode === 'deserts') {
+    // Update desert legend title with the condition name
+    const condition = data.query?.condition || data.condition || 'Radiology';
+    const conditionLabel = condition.charAt(0).toUpperCase() + condition.slice(1);
+    $('desert-legend-title').textContent = `${conditionLabel} Deserts`;
+
     if (data.gaps?.length > 0) {
       renderDesertGaps(data.gaps, hasHighlightRegion);
     }
@@ -1229,10 +1292,9 @@ app.ontoolresult = (result: any) => {
 
       // Store full tool data — applied after map + facilities load
       pendingToolData = data;
-      console.log('[OASIS] ontoolresult stored pendingToolData:', { mode: data.mode, highlight_region: data.highlight_region, narrative_focus: data.narrative_focus, initial_zoom: data.initial_zoom, gap_count: data.gap_count });
     }
-  } catch (err) {
-    console.error('Failed to parse geo_map tool result:', err);
+  } catch {
+    // Tool result parsing failed — map will still initialize
   }
 
   initMap();
@@ -1300,7 +1362,6 @@ document.querySelectorAll('[data-fly]').forEach(btn => {
 // ═══════════════════════════════════════════════════════════════
 if (isDevMode()) {
   // Dev mode: skip MCP connection, inject mock data, init map directly
-  console.log('[OASIS] Dev mode — using mock data. Set VITE_MAPBOX_TOKEN in ui/.env');
   const mockResult = getMockToolResult();
   MAPBOX_TOKEN = mockResult.config.mapbox_token;
   ELEVENLABS_API_KEY = mockResult.config.elevenlabs_api_key || '';
@@ -1325,7 +1386,7 @@ if (isDevMode()) {
     // Request initial iframe height from the host
     app.sendSizeChanged({ width: 0, height: 600 });
 
-    console.log('[OASIS] Connected to Claude Desktop via MCP');
+    // Connected to Claude Desktop via MCP
   });
 }
 

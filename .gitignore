@@ -81,6 +81,7 @@ notes/
 
 # Node.js
 node_modules/
+.vite/
 
 .mystuff/
 

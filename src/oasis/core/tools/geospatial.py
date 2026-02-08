@@ -15,6 +15,7 @@ Architecture Note:
     For production, swap in Mapbox Geocoding API or Nominatim.
 """
 
+import ast
 import json
 import math
 from dataclasses import dataclass, field
@@ -269,6 +270,38 @@ def _clean_val(v: Any) -> Any:
     if pd.isna(v):
         return None
     return v
+
+
+def _parse_list_field(v: Any) -> list[str]:
+    """Parse a CSV list field into a proper Python list of strings.
+
+    The VF Ghana CSV stores array fields as Python repr strings with single
+    quotes, e.g. "['item1', 'item2']".  JSON.parse on the frontend chokes on
+    single quotes, so we normalise here and return a real list.
+    """
+    if v is None:
+        return []
+    if isinstance(v, list):
+        return [str(s).strip() for s in v if s]
+    s = str(v).strip()
+    if not s or s in ("[]", "None", "null", "nan"):
+        return []
+    # Try Python literal first (handles single-quoted lists)
+    try:
+        parsed = ast.literal_eval(s)
+        if isinstance(parsed, list):
+            return [str(x).strip() for x in parsed if x]
+    except (ValueError, SyntaxError):
+        pass
+    # Try JSON
+    try:
+        parsed = json.loads(s)
+        if isinstance(parsed, list):
+            return [str(x).strip() for x in parsed if x]
+    except (json.JSONDecodeError, TypeError):
+        pass
+    # Last resort: treat the whole string as a single item
+    return [s] if s else []
 
 
 def haversine_distance(
@@ -573,10 +606,11 @@ class FindFacilitiesInRadiusTool:
                         "lat": f_lat,
                         "lng": f_lng,
                         "facility_type": _clean_val(row.get("facilityTypeId")) or "",
-                        "specialties": _clean_val(row.get("specialties")) or "",
-                        "procedures": _clean_val(row.get("procedure")) or "",
-                        "equipment": _clean_val(row.get("equipment")) or "",
-                        "capability": _clean_val(row.get("capability")) or "",
+                        "specialties": _parse_list_field(row.get("specialties")),
+                        "procedures": _parse_list_field(row.get("procedure")),
+                        "equipment": _parse_list_field(row.get("equipment")),
+                        "capability": _parse_list_field(row.get("capability")),
+                        "description": _clean_val(row.get("description")) or "",
                         "unique_id": _clean_val(row.get("unique_id")) or "",
                     }
                 )
@@ -1031,7 +1065,7 @@ class CountFacilitiesTool:
                     "name": row.get("name", "Unknown"),
                     "city": row.get("address_city", ""),
                     "region": row.get("address_stateOrRegion", ""),
-                    "specialties": row.get("specialties", ""),
+                    "specialties": _parse_list_field(row.get("specialties")),
                 })
 
         # Build summary
@@ -1105,11 +1139,13 @@ class GeocodeFacilitiesTool:
                 equipment,
                 capability,
                 facilityTypeId,
+                operatorTypeId,
                 description,
                 phone_numbers,
                 unique_id,
                 capacity,
                 numberDoctors,
+                yearEstablished,
                 lat,
                 "long"
             FROM "vf"."vf_ghana"
@@ -1161,14 +1197,18 @@ class GeocodeFacilitiesTool:
                         "name": _clean_val(row.get("name")) or "Unknown",
                         "city": str(row.get("address_city") or "").strip(),
                         "region": _clean_val(row.get("address_stateOrRegion")) or "",
+                        "address": _clean_val(row.get("address_line1")) or "",
                         "facility_type": _clean_val(row.get("facilityTypeId")) or "",
-                        "specialties": _clean_val(row.get("specialties")) or "",
-                        "procedures": _clean_val(row.get("procedure")) or "",
-                        "equipment": _clean_val(row.get("equipment")) or "",
-                        "capability": _clean_val(row.get("capability")) or "",
+                        "operator_type": _clean_val(row.get("operatorTypeId")) or "",
+                        "specialties": _parse_list_field(row.get("specialties")),
+                        "procedures": _parse_list_field(row.get("procedure")),
+                        "equipment": _parse_list_field(row.get("equipment")),
+                        "capability": _parse_list_field(row.get("capability")),
                         "description": _clean_val(row.get("description")) or "",
+                        "phone": _clean_val(row.get("phone_numbers")) or "",
                         "capacity": _clean_val(row.get("capacity")) or "",
                         "num_doctors": _clean_val(row.get("numberDoctors")) or "",
+                        "year_established": _clean_val(row.get("yearEstablished")) or "",
                         "unique_id": _clean_val(row.get("unique_id")) or "",
                     },
                 }
