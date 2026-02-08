@@ -19,8 +19,21 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent / "src"))
+
+# Load .env before anything else reads os.environ
+_env_file = Path(__file__).parent / ".env"
+if _env_file.is_file():
+    for _line in _env_file.read_text().splitlines():
+        _line = _line.strip()
+        if not _line or _line.startswith("#") or "=" not in _line:
+            continue
+        _k, _, _v = _line.partition("=")
+        os.environ.setdefault(_k.strip(), _v.strip())
+
 os.environ.setdefault("OASIS_DATA_DIR", str(Path(__file__).parent / "oasis_data"))
 os.environ.setdefault("OASIS_DATASET", "vf-ghana")
+
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -54,7 +67,23 @@ def _dataset():
     return DatasetRegistry.get(name)
 
 
-app = FastAPI(title="OASIS Map API", version="1.0")
+PORT = 8000
+
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    print("\n🌍 OASIS Map API")
+    print("─" * 40)
+    print(f"  UI:     http://localhost:{PORT}")
+    print(f"  API:    http://localhost:{PORT}/api/search?condition=cardiology&location=Accra")
+    print(f"  Health: http://localhost:{PORT}/api/health")
+    print("─" * 40 + "\n", flush=True)
+    yield
+
+
+app = FastAPI(title="OASIS Map API", version="1.0", lifespan=lifespan)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -171,6 +200,15 @@ async def geocode(
     })
 
 
+@app.get("/api/config")
+async def config():
+    """Return client-side config (tokens loaded from .env)."""
+    return JSONResponse({
+        "mapbox_token": os.environ.get("MAPBOX_TOKEN", ""),
+        "elevenlabs_api_key": os.environ.get("ELEVENLABS_API_KEY", ""),
+    })
+
+
 @app.get("/api/health")
 async def health():
     try:
@@ -181,10 +219,14 @@ async def health():
 
 
 if __name__ == "__main__":
-    print("\n🌍 OASIS Map API")
-    print("─" * 40)
-    print("  UI:     http://localhost:8000")
-    print("  API:    http://localhost:8000/api/search?condition=cardiology&location=Accra")
-    print("  Health: http://localhost:8000/api/health")
-    print("─" * 40 + "\n")
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+    import socket
+
+    # Check if port is already in use before starting
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        if s.connect_ex(("localhost", PORT)) == 0:
+            print(f"\n❌ Port {PORT} is already in use.")
+            print("   Kill the existing process first:")
+            print(f"   lsof -ti :{PORT} | xargs kill")
+            sys.exit(1)
+
+    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="info")

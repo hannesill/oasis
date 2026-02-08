@@ -101,6 +101,7 @@ def create_mcp_config(db_path=None):
                 "cwd": str(current_dir),
                 "env": {
                     "OASIS_DATA_DIR": str(oasis_data_dir),
+                    "MAPBOX_TOKEN": os.environ.get("MAPBOX_TOKEN", ""),
                 },
             }
         }

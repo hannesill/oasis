@@ -8,7 +8,7 @@ with Vite that includes the MCP Apps SDK for host communication.
 from pathlib import Path
 
 # MCP Apps resource URI - used in @mcp.resource()
-RESOURCE_URI = "ui://m4/geo-map"
+RESOURCE_URI = "ui://oasis/geo-map"
 
 # Path to the built HTML bundle (output from Vite build)
 _UI_HTML_PATH = Path(__file__).parent / "mcp-app.html"
@@ -26,7 +26,7 @@ def get_ui_html() -> str:
     if not _UI_HTML_PATH.exists():
         raise FileNotFoundError(
             f"UI bundle not found at {_UI_HTML_PATH}. "
-            "Run 'cd src/m4/apps/geo_map/ui && npm install && npm run build' first."
+            "Run 'cd src/oasis/apps/geo_map/ui && npm install && npm run build' first."
         )
 
     return _UI_HTML_PATH.read_text(encoding="utf-8")

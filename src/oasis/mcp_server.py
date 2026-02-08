@@ -19,10 +19,35 @@ Tool Surface:
     capability checking before tool invocation.
 """
 
+import json
+import os
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
 from fastmcp import FastMCP
+
+
+# ---------------------------------------------------------------------------
+# Lightweight .env loader (no python-dotenv dependency)
+# ---------------------------------------------------------------------------
+def _load_dotenv() -> None:
+    """Load .env from project root into os.environ (setdefault — no overwrite)."""
+    # Walk up from this file to find .env next to pyproject.toml
+    here = Path(__file__).resolve().parent
+    for candidate in [here, *here.parents]:
+        env_file = candidate / ".env"
+        if env_file.is_file():
+            for line in env_file.read_text().splitlines():
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                os.environ.setdefault(key.strip(), value.strip())
+            break
+
+
+_load_dotenv()
 
 # MCP Apps imports
 from oasis.apps import init_apps
@@ -396,7 +421,7 @@ def find_facilities_in_radius(
                 limit=limit,
             ),
         )
-        return serialize_for_mcp(result)
+        return json.dumps(result)
     except OASISError as e:
         return f"**Error:** {e}"
 
@@ -435,7 +460,7 @@ def find_coverage_gaps(
                 min_gap_km=min_gap_km,
             ),
         )
-        return serialize_for_mcp(result)
+        return json.dumps(result)
     except OASISError as e:
         return f"**Error:** {e}"
 
@@ -469,11 +494,11 @@ def calculate_distance(
         result = tool.invoke(
             dataset,
             CalculateDistanceInput(
-                location_a=location_a,
-                location_b=location_b,
+                from_location=location_a,
+                to_location=location_b,
             ),
         )
-        return serialize_for_mcp(result)
+        return json.dumps(result)
     except OASISError as e:
         return f"**Error:** {e}"
 
@@ -509,7 +534,7 @@ def geocode_facilities(
                 facility_type=facility_type,
             ),
         )
-        return serialize_for_mcp(result)
+        return json.dumps(result)
     except OASISError as e:
         return f"**Error:** {e}"
 
@@ -562,7 +587,15 @@ def geo_map(
                 mode=mode,
             ),
         )
-        return serialize_for_mcp(result)
+
+        response = {
+            **result,
+            "config": {
+                "mapbox_token": os.environ.get("MAPBOX_TOKEN", ""),
+                "elevenlabs_api_key": os.environ.get("ELEVENLABS_API_KEY", ""),
+            },
+        }
+        return json.dumps(response)
     except OASISError as e:
         return f"**Error:** {e}"
 
@@ -579,7 +612,7 @@ def _inject_geo_map_meta() -> None:
         original_to_mcp = tool_obj.to_mcp_tool
 
         def patched_to_mcp(**overrides: Any) -> Any:
-            overrides.setdefault("meta", {"ui": {"resourceUri": GEO_MAP_URI}})
+            overrides.setdefault("_meta", {"ui": {"resourceUri": GEO_MAP_URI}})
             return original_to_mcp(**overrides)
 
         object.__setattr__(tool_obj, "to_mcp_tool", patched_to_mcp)

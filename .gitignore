@@ -72,6 +72,9 @@ Desktop.ini
 # Ruff
 .ruff_cache/
 
+# MLflow local state
+mlflow.db
+
 # Datasets and other large files
 
 notes/

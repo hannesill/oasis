@@ -424,18 +424,16 @@
 
 <script>
 // ═══════════════════════════════════════════════════════════════
-// CONFIG
+// CONFIG — loaded from server (.env)
 // ═══════════════════════════════════════════════════════════════
-const MAPBOX_TOKEN = 'pk.eyJ1IjoicmFqbmFmIiwiYSI6ImNtbGN3cm1uMzExd3czZnI0OGVleW9iNnYifQ.xbDfYFsP0nLZtcltzMzVTw';
 const API_BASE = '';  // same origin when served by map_api.py
-const ELEVENLABS_API_KEY = 'sk_8edfc5ce468756b30944fd0074da83ba789b86cdae1d8d65';
-const ELEVENLABS_AGENT_ID = '5fb47760b0b22b63d689754639894c80b823ed971ff73ced808b98563e1447ce';
-
-mapboxgl.accessToken = MAPBOX_TOKEN;
+let MAPBOX_TOKEN = '';
+let ELEVENLABS_API_KEY = '';
 
 // ═══════════════════════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════════════════════
+let map = null;
 let facilitiesGeoJSON = null;
 let activeMarkers = [];
 let searchResultsCache = [];
@@ -444,49 +442,84 @@ let current3DModel = null;
 let audioElement = null;
 
 // ═══════════════════════════════════════════════════════════════
-// MAP INIT
+// BOOT — fetch config then init map
 // ═══════════════════════════════════════════════════════════════
-const map = new mapboxgl.Map({
-    container: 'map',
-    style: 'mapbox://styles/mapbox/dark-v11',
-    projection: 'globe',
-    center: [0, 20],
-    zoom: 1.8,
-    pitch: 0,
-    bearing: 0,
-    antialias: true,
-});
+(async function boot() {
+    try {
+        const resp = await fetch(API_BASE + '/api/config');
+        const cfg = await resp.json();
+        MAPBOX_TOKEN = cfg.mapbox_token || '';
+        ELEVENLABS_API_KEY = cfg.elevenlabs_api_key || '';
+    } catch (e) {
+        console.error('Failed to fetch /api/config:', e);
+    }
 
-map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'top-right');
+    if (!MAPBOX_TOKEN) {
+        document.getElementById('loader').innerHTML =
+            '<div style="color:#FF5252;font-size:16px;text-align:center;padding:20px;">' +
+            '⚠️ MAPBOX_TOKEN not set.<br>Add it to <code>.env</code> and restart <code>python map_api.py</code></div>';
+        return;
+    }
 
-map.on('style.load', () => {
-    map.setFog({
-        color: 'rgb(10,10,30)',
-        'high-color': 'rgb(30,50,120)',
-        'horizon-blend': 0.08,
-        'space-color': 'rgb(5,5,15)',
-        'star-intensity': 0.95,
+    mapboxgl.accessToken = MAPBOX_TOKEN;
+
+    map = new mapboxgl.Map({
+        container: 'map',
+        style: 'mapbox://styles/mapbox/dark-v11',
+        projection: 'globe',
+        center: [0, 20],
+        zoom: 1.8,
+        pitch: 0,
+        bearing: 0,
+        antialias: true,
     });
-});
 
-map.on('load', async () => {
-    // 3D terrain
-    map.addSource('mapbox-dem', { type: 'raster-dem', url: 'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize: 512, maxzoom: 14 });
-    map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 });
-    map.addLayer({ id: 'sky', type: 'sky', paint: { 'sky-type': 'atmosphere', 'sky-atmosphere-sun': [0,90], 'sky-atmosphere-sun-intensity': 15 } });
+    map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'top-right');
 
-    // Load data + build layers
-    await loadFacilities();
-    addMapLayers();
-    populateConditionDropdown();
-    checkApiHealth();
+    map.on('style.load', () => {
+        map.setFog({
+            color: 'rgb(10,10,30)',
+            'high-color': 'rgb(30,50,120)',
+            'horizon-blend': 0.08,
+            'space-color': 'rgb(5,5,15)',
+            'star-intensity': 0.95,
+        });
+    });
 
-    // Intro animation
-    setTimeout(() => {
+    map.on('error', (e) => {
+        console.error('Mapbox error:', e.error || e);
         document.getElementById('loader').classList.add('gone');
-        map.flyTo({ center: [-1.0232, 7.9465], zoom: 6.5, pitch: 50, bearing: -15, duration: 4000, essential: true });
-    }, 2200);
-});
+        showApiStatus('Map error: ' + (e.error?.message || 'unknown'), false);
+    });
+
+    map.on('load', async () => {
+        // 3D terrain
+        map.addSource('mapbox-dem', { type: 'raster-dem', url: 'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize: 512, maxzoom: 14 });
+        map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 });
+        map.addLayer({ id: 'sky', type: 'sky', paint: { 'sky-type': 'atmosphere', 'sky-atmosphere-sun': [0,90], 'sky-atmosphere-sun-intensity': 15 } });
+
+        // Load data + build layers
+        await loadFacilities();
+        addMapLayers();
+        populateConditionDropdown();
+        checkApiHealth();
+
+        // Intro animation
+        setTimeout(() => {
+            document.getElementById('loader').classList.add('gone');
+            map.flyTo({ center: [-1.0232, 7.9465], zoom: 6.5, pitch: 50, bearing: -15, duration: 4000, essential: true });
+        }, 2200);
+    });
+
+    // Timeout fallback — don't leave user stuck on loader forever
+    setTimeout(() => {
+        const loader = document.getElementById('loader');
+        if (!loader.classList.contains('gone')) {
+            loader.classList.add('gone');
+            showApiStatus('Map load timed out — check console for errors', false);
+        }
+    }, 15000);
+})();
 
 // ═══════════════════════════════════════════════════════════════
 // DATA LOADING

@@ -20,10 +20,10 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import * as THREE from 'three';
 
 // ═══════════════════════════════════════════════════════════════
-// CONFIG
+// CONFIG — injected from server via ontoolresult
 // ═══════════════════════════════════════════════════════════════
-const MAPBOX_TOKEN = 'pk.eyJ1IjoicmFqbmFmIiwiYSI6ImNtbGN3cm1uMzExd3czZnI0OGVleW9iNnYifQ.xbDfYFsP0nLZtcltzMzVTw';
-const ELEVENLABS_API_KEY = 'sk_8edfc5ce468756b30944fd0074da83ba789b86cdae1d8d65';
+let MAPBOX_TOKEN = '';
+let ELEVENLABS_API_KEY = '';
 
 // ═══════════════════════════════════════════════════════════════
 // MCP APP INIT
@@ -62,7 +62,12 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<an
   const result = await app.callServerTool({ name, arguments: args });
   const textContent = result.content?.find((c: any) => c.type === "text");
   if (textContent && "text" in textContent) {
-    return JSON.parse(textContent.text as string);
+    const raw = textContent.text as string;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      throw new Error(`Failed to parse ${name} response as JSON (got ${raw.slice(0, 120)}…)`);
+    }
   }
   throw new Error(`No text content in ${name} response`);
 }
@@ -71,6 +76,10 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<an
 // MAP INITIALIZATION
 // ═══════════════════════════════════════════════════════════════
 function initMap(): void {
+  if (!MAPBOX_TOKEN) {
+    showApiStatus('MAPBOX_TOKEN not set — add it to .env and restart MCP server', false);
+    return;
+  }
   mapboxgl.accessToken = MAPBOX_TOKEN;
 
   map = new mapboxgl.Map({
@@ -96,6 +105,12 @@ function initMap(): void {
     });
   });
 
+  map.on('error', (e: any) => {
+    console.error('Mapbox error:', e.error || e);
+    $('loader').classList.add('gone');
+    showApiStatus('Map error: ' + (e.error?.message || 'unknown'), false);
+  });
+
   map.on('load', async () => {
     map.addSource('mapbox-dem', { type: 'raster-dem', url: 'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize: 512, maxzoom: 14 });
     map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 });
@@ -113,6 +128,15 @@ function initMap(): void {
     }, 2200);
   });
 
+  // Timeout fallback — don't leave user stuck on loader forever
+  setTimeout(() => {
+    const loader = $('loader');
+    if (!loader.classList.contains('gone')) {
+      loader.classList.add('gone');
+      showApiStatus('Map load timed out — check console for errors', false);
+    }
+  }, 15000);
+
   map.on('zoom', () => { if (map.getZoom() >= 14 && !layerState.buildings) toggleLayer('buildings'); });
 }
 
@@ -122,18 +146,8 @@ function initMap(): void {
 async function loadFacilitiesViaMCP(): Promise<void> {
   try {
     showApiStatus('Loading facilities via MCP…', true);
-    const data = await callTool('geocode_facilities', { region: 'all' });
-
-    // geocode_facilities returns { features: [...], total, ... } in GeoJSON-like format
-    // Wrap in FeatureCollection
-    facilitiesGeoJSON = {
-      type: 'FeatureCollection',
-      features: (data.features || []).map((f: any) => ({
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: [f.lng || f.geometry?.coordinates?.[0], f.lat || f.geometry?.coordinates?.[1]] },
-        properties: f.properties || f,
-      })),
-    };
+    const data = await callTool('geocode_facilities', {});
+    facilitiesGeoJSON = data.geojson || { type: 'FeatureCollection', features: [] };
 
     // Compute stats
     const cities = new Set<string>();
@@ -149,7 +163,7 @@ async function loadFacilitiesViaMCP(): Promise<void> {
     $('st-cities').textContent = String(cities.size);
     $('st-specs').textContent = String(specs.size);
 
-    showApiStatus(`Loaded ${facilitiesGeoJSON.features.length} facilities via MCP`, true);
+    showApiStatus(`Loaded ${facilitiesGeoJSON.features.length} facilities`, true);
   } catch (err: any) {
     console.error('Failed to load facilities via MCP:', err);
     showApiStatus('Failed to load facilities: ' + err.message, false);
@@ -199,19 +213,6 @@ function addMapLayers(): void {
     }
   });
 
-  // 3D Hospital extrusions
-  map.addLayer({
-    id: 'layer-3d-hospitals', type: 'fill-extrusion', source: 'facilities',
-    minzoom: 10,
-    paint: {
-      'fill-extrusion-color': ['interpolate', ['linear'], ['zoom'], 10, '#FF6B35', 15, '#FF8F6B'],
-      'fill-extrusion-height': ['interpolate', ['exponential', 1.5], ['zoom'], 10, 20, 14, 80, 18, 200],
-      'fill-extrusion-base': 0,
-      'fill-extrusion-opacity': 0.9,
-      'fill-extrusion-vertical-gradient': true
-    }
-  }, 'layer-buildings');
-
   // Markers (flat circles)
   map.addLayer({
     id: 'layer-markers', type: 'circle', source: 'facilities',
@@ -248,11 +249,8 @@ function addMapLayers(): void {
   };
 
   map.on('click', 'layer-markers', handleClick);
-  map.on('click', 'layer-3d-hospitals', handleClick);
   map.on('mouseenter', 'layer-markers', () => { map.getCanvas().style.cursor = 'pointer'; });
   map.on('mouseleave', 'layer-markers', () => { map.getCanvas().style.cursor = ''; });
-  map.on('mouseenter', 'layer-3d-hospitals', () => { map.getCanvas().style.cursor = 'pointer'; });
-  map.on('mouseleave', 'layer-3d-hospitals', () => { map.getCanvas().style.cursor = ''; });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -325,7 +323,7 @@ async function doGaps(): Promise<void> {
 
   try {
     const data = await callTool('find_coverage_gaps', {
-      specialty: condition, min_gap_km: 50, limit: 15
+      procedure_or_specialty: condition, min_gap_km: 50
     });
 
     console.log(`✅ find_coverage_gaps found ${data.gap_count} gaps`);
@@ -511,7 +509,6 @@ function toggleLayer(name: string): void {
   switch (name) {
     case 'markers':
       map.setLayoutProperty('layer-markers', 'visibility', on ? 'visible' : 'none');
-      map.setLayoutProperty('layer-3d-hospitals', 'visibility', on ? 'visible' : 'none');
       map.setLayoutProperty('layer-glow', 'visibility', on ? 'visible' : 'none');
       break;
     case 'heatmap':
@@ -761,8 +758,24 @@ app.ontoolinput = () => {
 };
 
 // Called when the geo_map tool result is received
-app.ontoolresult = () => {
-  // Map initialization happens here
+app.ontoolresult = (result: any) => {
+  try {
+    const textContent = result?.content?.find((c: any) => c.type === 'text');
+    if (textContent && 'text' in textContent) {
+      const data = JSON.parse(textContent.text as string);
+
+      // Extract config (Mapbox token, ElevenLabs key)
+      if (data.config) {
+        MAPBOX_TOKEN = data.config.mapbox_token || '';
+        ELEVENLABS_API_KEY = data.config.elevenlabs_api_key || '';
+      }
+
+      // Facilities loaded separately via loadFacilitiesViaMCP (bypasses 1MB tool result limit)
+    }
+  } catch (err) {
+    console.error('Failed to parse geo_map tool result:', err);
+  }
+
   initMap();
 };
 

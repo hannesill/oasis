@@ -939,12 +939,15 @@ class GeocodeFacilitiesTool:
 
                 geocoded += 1
 
-                # Add small random offset to prevent exact overlaps
-                # in cities with multiple facilities
+                # Deterministic jitter based on facility name (reproducible)
+                import hashlib
                 import random
 
-                lat_offset = random.uniform(-0.005, 0.005)
-                lng_offset = random.uniform(-0.005, 0.005)
+                name_str = str(row.get("name", ""))
+                seed = int(hashlib.md5(name_str.encode()).hexdigest()[:8], 16)
+                rng = random.Random(seed)
+                lat_offset = rng.uniform(-0.005, 0.005)
+                lng_offset = rng.uniform(-0.005, 0.005)
 
                 feature = {
                     "type": "Feature",
