@@ -47,6 +47,7 @@ dependencies = [
     "databricks-sdk>=0.30.0",
     "sentence-transformers>=3.0.0",
     "numpy>=2.2.6",
+    "openai>=1.0.0",
 ]
 
 [dependency-groups]
