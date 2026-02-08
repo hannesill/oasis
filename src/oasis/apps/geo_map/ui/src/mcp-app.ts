@@ -40,6 +40,9 @@ let layerState = { markers: true, heatmap: false, deserts: false };
 let current3DModel: string | null = null;
 let audioElement: HTMLAudioElement | null = null;
 let currentFacilityCoords: [number, number] | null = null;
+let desertModeActive = false;
+let desertLayersRendered = false;
+let desertPulseTimer: ReturnType<typeof setInterval> | null = null;
 
 // Tool result data — stored by ontoolresult, consumed after map loads
 let pendingToolData: any = null;
@@ -84,6 +87,170 @@ function fmtSpec(s: string): string { return s.replace(/([A-Z])/g, ' $1').replac
 
 function showApiStatus(msg: string, ok: boolean): void {
   console.log(`[OASIS] ${ok ? '✅' : '⚠️'} ${msg}`);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DESERT HEATMAP — algorithms (noise, distance, filtering, grid)
+// ═══════════════════════════════════════════════════════════════
+
+// 2D simplex noise — deterministic, returns [-1, 1]
+const _perm = [151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,190,6,148,247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,88,237,149,56,87,174,20,125,136,171,168,68,175,74,165,71,134,139,48,27,166,77,146,158,231,83,111,229,122,60,211,133,230,220,105,92,41,55,46,245,40,244,102,143,54,65,25,63,161,1,216,80,73,209,76,132,187,208,89,18,169,200,196,135,130,116,188,159,86,164,100,109,198,173,186,3,64,52,217,226,250,124,123,5,202,38,147,118,126,255,82,85,212,207,206,59,227,47,16,58,17,182,189,28,42,223,183,170,213,119,248,152,2,44,154,163,70,221,153,101,155,167,43,172,9,129,22,39,253,19,98,108,110,79,113,224,232,178,185,112,104,218,246,97,228,251,34,242,193,238,210,144,12,191,179,162,241,81,51,145,235,249,14,239,107,49,192,214,31,181,199,106,157,184,84,204,176,115,121,50,45,127,4,150,254,138,236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180,151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,190,6,148,247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,88,237,149,56,87,174,20,125,136,171,168,68,175,74,165,71,134,139,48,27,166,77,146,158,231,83,111,229,122,60,211,133,230,220,105,92,41,55,46,245,40,244,102,143,54,65,25,63,161,1,216,80,73,209,76,132,187,208,89,18,169,200,196,135,130,116,188,159,86,164,100,109,198,173,186,3,64,52,217,226,250,124,123,5,202,38,147,118,126,255,82,85,212,207,206,59,227,47,16,58,17,182,189,28,42,223,183,170,213,119,248,152,2,44,154,163,70,221,153,101,155,167,43,172,9,129,22,39,253,19,98,108,110,79,113,224,232,178,185,112,104,218,246,97,228,251,34,242,193,238,210,144,12,191,179,162,241,81,51,145,235,249,14,239,107,49,192,214,31,181,199,106,157,184,84,204,176,115,121,50,45,127,4,150,254,138,236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180];
+const _grad3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
+
+function simplex2(x: number, y: number): number {
+  const F2 = 0.5 * (Math.sqrt(3.0) - 1.0);
+  const G2 = (3.0 - Math.sqrt(3.0)) / 6.0;
+  const s = (x + y) * F2;
+  const i = Math.floor(x + s), j = Math.floor(y + s);
+  const t = (i + j) * G2;
+  const x0 = x - (i - t), y0 = y - (j - t);
+  const i1 = x0 > y0 ? 1 : 0, j1 = x0 > y0 ? 0 : 1;
+  const x1 = x0 - i1 + G2, y1 = y0 - j1 + G2;
+  const x2 = x0 - 1.0 + 2.0 * G2, y2 = y0 - 1.0 + 2.0 * G2;
+  const ii = i & 255, jj = j & 255;
+  const gi0 = _perm[ii + _perm[jj]] % 12;
+  const gi1 = _perm[ii + i1 + _perm[jj + j1]] % 12;
+  const gi2 = _perm[ii + 1 + _perm[jj + 1]] % 12;
+  let n0 = 0, n1 = 0, n2 = 0;
+  let t0 = 0.5 - x0 * x0 - y0 * y0;
+  if (t0 >= 0) { t0 *= t0; n0 = t0 * t0 * (_grad3[gi0][0] * x0 + _grad3[gi0][1] * y0); }
+  let t1 = 0.5 - x1 * x1 - y1 * y1;
+  if (t1 >= 0) { t1 *= t1; n1 = t1 * t1 * (_grad3[gi1][0] * x1 + _grad3[gi1][1] * y1); }
+  let t2 = 0.5 - x2 * x2 - y2 * y2;
+  if (t2 >= 0) { t2 *= t2; n2 = t2 * t2 * (_grad3[gi2][0] * x2 + _grad3[gi2][1] * y2); }
+  return 70.0 * (n0 + n1 + n2);
+}
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Match terms per facility field for radiology capability detection
+const _RADIO_FIELDS: Array<{ names: string[]; terms: string[] }> = [
+  { names: ['specialties', 'specialty'], terms: ['radiology', 'imaging'] },
+  { names: ['equipment'], terms: ['x-ray', 'xray', 'ct scan', 'ct', 'mri', 'ultrasound', 'imaging', 'radiograph', 'fluoroscop'] },
+  { names: ['procedures', 'procedure'], terms: ['x-ray', 'xray', 'ct scan', 'mri', 'ultrasound', 'imaging', 'radiograph'] },
+  { names: ['capability'], terms: ['radiology', 'imaging', 'x-ray', 'xray', 'ct', 'mri', 'ultrasound'] },
+];
+
+function _checkField(props: any, fieldNames: string[], terms: string[]): boolean {
+  for (const fn of fieldNames) {
+    const raw = props[fn];
+    if (!raw) continue;
+    let arr: string[];
+    try { arr = typeof raw === 'string' ? JSON.parse(raw) : Array.isArray(raw) ? raw : [raw]; } catch { arr = [String(raw)]; }
+    for (const item of arr) {
+      const lower = String(item).toLowerCase();
+      for (const term of terms) { if (lower.includes(term)) return true; }
+    }
+  }
+  return false;
+}
+
+/**
+ * For each facility, compute the haversine distance to its nearest neighbor
+ * and store it as `properties.distance` (km).
+ */
+function computeNearestNeighborDistances(geojson: any): void {
+  const features = geojson?.features;
+  if (!features || features.length === 0) return;
+
+  const coords: Array<{ lat: number; lng: number }> = features.map((f: any) => {
+    const [lng, lat] = f.geometry.coordinates;
+    return { lat, lng };
+  });
+
+  for (let i = 0; i < features.length; i++) {
+    let minDist = Infinity;
+    for (let j = 0; j < coords.length; j++) {
+      if (i === j) continue;
+      const d = haversineKm(coords[i].lat, coords[i].lng, coords[j].lat, coords[j].lng);
+      if (d < minDist) minDist = d;
+    }
+    features[i].properties.distance = minDist === Infinity ? null : minDist;
+  }
+}
+
+function filterRadiologyFacilities(geojson: any): Array<{ lng: number; lat: number; id: string }> {
+  const results: Array<{ lng: number; lat: number; id: string }> = [];
+  if (!geojson?.features) return results;
+  geojson.features.forEach((feat: any, idx: number) => {
+    const p = feat.properties || {};
+    const isRadio = _RADIO_FIELDS.some(f => _checkField(p, f.names, f.terms));
+    if (isRadio && feat.geometry?.coordinates) {
+      const [lng, lat] = feat.geometry.coordinates;
+      results.push({ lng, lat, id: String(p.pk_unique_id ?? p.id ?? `_idx_${idx}`) });
+    }
+  });
+  return results;
+}
+
+function generateDesertGrid(radioFacs: Array<{ lng: number; lat: number }>): any {
+  if (radioFacs.length === 0) return { type: 'FeatureCollection', features: [] };
+  const latMin = 4.5, latMax = 11.2, lngMin = -3.3, lngMax = 1.3, step = 0.1;
+  const points: Array<{ lng: number; lat: number; dist: number }> = [];
+  let maxDist = 0;
+  for (let lat = latMin; lat <= latMax; lat += step) {
+    for (let lng = lngMin; lng <= lngMax; lng += step) {
+      let minD = Infinity;
+      for (const f of radioFacs) {
+        const d = haversineKm(lat, lng, f.lat, f.lng);
+        if (d < minD) minD = d;
+      }
+      points.push({ lng, lat, dist: minD });
+      if (minD > maxDist) maxDist = minD;
+    }
+  }
+  return {
+    type: 'FeatureCollection',
+    features: points.map(pt => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [pt.lng, pt.lat] },
+      properties: { heat: maxDist > 0 ? pt.dist / maxDist : 0 },
+    })),
+  };
+}
+
+function generateIsochrone(center: [number, number], radiusKm: number, seed: number): { type: string; coordinates: number[][][] } {
+  const [cLng, cLat] = center;
+  const verts: number[][] = [];
+  const n = 72;
+  for (let i = 0; i <= n; i++) {
+    const angle = (i % n) * (2 * Math.PI / n);
+    // Simplex noise for natural irregularity: 2-3 lobes per rotation
+    const nx = seed + Math.cos(angle) * 2.5;
+    const ny = seed * 0.7 + Math.sin(angle) * 2.5;
+    const distortion = 1.0 + simplex2(nx, ny) * 0.25; // +/-25%
+    const r = radiusKm * distortion;
+    const lat = cLat + (r / 111.32) * Math.cos(angle);
+    const lng = cLng + (r / (111.32 * Math.cos(cLat * Math.PI / 180))) * Math.sin(angle);
+    verts.push([lng, lat]);
+  }
+  return { type: 'Polygon', coordinates: [verts] };
+}
+
+function generateAllIsochrones(radioFacs: Array<{ lng: number; lat: number; id: string }>): any {
+  const rings: Array<{ label: string; km: number }> = [
+    { label: '30min', km: 20 },
+    { label: '60min', km: 40 },
+    { label: '120min', km: 70 },
+  ];
+  const features: any[] = [];
+  for (const fac of radioFacs) {
+    const seed = Math.abs(Math.sin(fac.lng * 73856.093 + fac.lat * 19349.663) * 43758.5453);
+    for (const ring of rings) {
+      features.push({
+        type: 'Feature',
+        geometry: generateIsochrone([fac.lng, fac.lat], ring.km, seed + ring.km),
+        properties: { ring: ring.label, facilityId: fac.id },
+      });
+    }
+  }
+  return { type: 'FeatureCollection', features };
 }
 
 /**
@@ -137,7 +304,7 @@ function initMap(): void {
     map.setConfigProperty('basemap', 'lightPreset', 'night');
     map.setConfigProperty('basemap', 'showPointOfInterestLabels', false);
     map.setConfigProperty('basemap', 'showTransitLabels', false);
-    map.setConfigProperty('basemap', 'showPlaceLabels', false);
+    map.setConfigProperty('basemap', 'showPlaceLabels', true);
     map.setConfigProperty('basemap', 'showRoadLabels', false);
   });
 
@@ -147,50 +314,41 @@ function initMap(): void {
     showApiStatus('Map error: ' + (e.error?.message || 'unknown'), false);
   });
 
-  map.on('load', async () => {
+  map.on('load', () => {
     map.addSource('mapbox-dem', { type: 'raster-dem', url: 'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize: 512, maxzoom: 14 });
     map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 });
 
-    // Load facilities via MCP tool
-    await loadFacilitiesViaMCP();
-    addMapLayers();
-
-    // Determine intro camera target — tool data can override the default
-    const toolTarget = resolveToolCameraTarget();
-
-    // Intro animation — cinematic two-phase zoom
+    // Intro animation — fires immediately, never blocked by data loading
     setTimeout(() => {
       $('loader').classList.add('gone');
-      if (toolTarget) {
-        // Phase 1: Globe → West Africa overview (2.5s)
+      // Phase 1: Globe → West Africa overview (2.5s)
+      map.flyTo({
+        center: [-1.0, 8.0],
+        zoom: 4.5,
+        pitch: 0,
+        bearing: 0,
+        duration: 2500,
+        essential: true,
+      });
+      // Phase 2: West Africa → Northern Ghana with cinematic tilt (2.5s)
+      setTimeout(() => {
         map.flyTo({
-          center: [-1.0, 8.0],
-          zoom: 4.5,
-          pitch: 0,
-          bearing: 0,
+          center: [-0.9057, 9.5439],
+          zoom: 8,
+          pitch: 50,
+          bearing: -15,
           duration: 2500,
           essential: true,
         });
-        // Phase 2: West Africa → Target region with cinematic tilt (2.5s)
-        setTimeout(() => {
-          map.flyTo({
-            center: toolTarget.center,
-            zoom: Math.max(toolTarget.zoom, 8),
-            pitch: 50,
-            bearing: -15,
-            duration: 2500,
-            essential: true,
-          });
-        }, 2700);
-      } else {
-        // Default: fly to Ghana overview
-        map.flyTo({ center: [-1.0232, 7.9465], zoom: 6.5, pitch: 50, bearing: -15, duration: 4000, essential: true });
-      }
+      }, 2700);
     }, 600);
 
-    // Apply tool data (deserts, region highlight) during Phase 2
-    // so overlays appear as the camera dives in
-    setTimeout(() => { applyToolData(); }, 3800);
+    // Load facilities in parallel — layers appear once data is ready
+    const dataReady = loadFacilitiesViaMCP().then(() => { addMapLayers(); });
+
+    // Apply tool data after Phase 2 lands AND data is loaded
+    const phase2Done = new Promise(resolve => setTimeout(resolve, 5400));
+    Promise.all([dataReady, phase2Done]).then(() => { applyToolData(); });
   });
 
   // Timeout fallback — don't leave user stuck on loader forever
@@ -212,6 +370,7 @@ async function loadFacilitiesViaMCP(): Promise<void> {
     showApiStatus('Loading facilities via MCP…', true);
     const data = await callTool('geocode_facilities', {});
     facilitiesGeoJSON = data.geojson || { type: 'FeatureCollection', features: [] };
+    computeNearestNeighborDistances(facilitiesGeoJSON);
 
     showApiStatus(`Loaded ${facilitiesGeoJSON.features.length} facilities`, true);
   } catch (err: any) {
@@ -525,6 +684,235 @@ function applyRegionHighlight(region: string): void {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// DESERT HEATMAP — rendering, animation, toggle
+// ═══════════════════════════════════════════════════════════════
+
+function renderDesertHeatmap(): void {
+  if (!facilitiesGeoJSON || desertLayersRendered) return;
+  const radioFacs = filterRadiologyFacilities(facilitiesGeoJSON);
+  console.log(`[OASIS] Found ${radioFacs.length} radiology-capable facilities`);
+  if (radioFacs.length === 0) return;
+
+  // Tag each facility with _isRadiology for marker styling
+  const radioIds = new Set(radioFacs.map(f => f.id));
+  facilitiesGeoJSON.features.forEach((feat: any, idx: number) => {
+    const p = feat.properties || {};
+    const id = String(p.pk_unique_id ?? p.id ?? `_idx_${idx}`);
+    feat.properties._isRadiology = radioIds.has(id) ? 1 : 0;
+  });
+  map.getSource('facilities').setData(facilitiesGeoJSON);
+
+  // Generate & add data sources
+  const isochrones = generateAllIsochrones(radioFacs);
+  map.addSource('isochrones', { type: 'geojson', data: isochrones });
+  const grid = generateDesertGrid(radioFacs);
+  map.addSource('desert-grid', { type: 'geojson', data: grid });
+
+  // Desert heatmap layer (starts invisible — animated in)
+  map.addLayer({
+    id: 'layer-desert-heatmap', type: 'heatmap', source: 'desert-grid',
+    slot: 'middle',
+    paint: {
+      'heatmap-weight': ['get', 'heat'],
+      'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 0, 0.5, 6, 1.5, 9, 2.5],
+      'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 0, 8, 6, 35, 9, 55],
+      'heatmap-opacity': 0,
+      'heatmap-color': [
+        'interpolate', ['linear'], ['heatmap-density'],
+        0, 'rgba(0,0,0,0)',
+        0.1, 'rgba(80,0,0,0)',
+        0.3, 'rgba(180,0,0,0.3)',
+        0.5, 'rgba(255,30,0,0.5)',
+        0.7, 'rgba(255,80,0,0.7)',
+        0.9, 'rgba(255,200,50,0.85)',
+        1.0, 'rgba(255,255,255,0.9)',
+      ],
+    },
+  });
+
+  // Isochrone fill layer
+  map.addLayer({
+    id: 'layer-isochrone-fill', type: 'fill', source: 'isochrones',
+    slot: 'middle',
+    paint: {
+      'fill-color': [
+        'case',
+        ['==', ['get', 'ring'], '30min'], '#00FF88',
+        ['==', ['get', 'ring'], '60min'], '#FFD740',
+        '#FF6B35',
+      ],
+      'fill-opacity': 0,
+    },
+  });
+
+  // Isochrone stroke layers (separate for dash patterns)
+  map.addLayer({
+    id: 'layer-isochrone-stroke-30', type: 'line', source: 'isochrones',
+    slot: 'middle',
+    filter: ['==', ['get', 'ring'], '30min'],
+    paint: { 'line-color': '#00FF88', 'line-width': 1.5, 'line-opacity': 0 },
+  });
+  map.addLayer({
+    id: 'layer-isochrone-stroke-60', type: 'line', source: 'isochrones',
+    slot: 'middle',
+    filter: ['==', ['get', 'ring'], '60min'],
+    paint: { 'line-color': '#FFD740', 'line-width': 1.5, 'line-opacity': 0, 'line-dasharray': [4, 4] },
+  });
+  map.addLayer({
+    id: 'layer-isochrone-stroke-120', type: 'line', source: 'isochrones',
+    slot: 'middle',
+    filter: ['==', ['get', 'ring'], '120min'],
+    paint: { 'line-color': '#FF6B35', 'line-width': 1.5, 'line-opacity': 0, 'line-dasharray': [2, 4] },
+  });
+
+  desertLayersRendered = true;
+}
+
+function animateDesertReveal(): void {
+  const dur = 2000;
+  const t0 = performance.now();
+  function easeOut(t: number): number { return 1 - Math.pow(1 - t, 3); }
+
+  function tick() {
+    const raw = Math.min((performance.now() - t0) / dur, 1);
+    const e = easeOut(raw);
+
+    // 1) Heatmap fade-in
+    if (map.getLayer('layer-desert-heatmap'))
+      map.setPaintProperty('layer-desert-heatmap', 'heatmap-opacity', e * 0.7);
+
+    // 2) Isochrone fill fade-in (per-ring targets)
+    if (map.getLayer('layer-isochrone-fill'))
+      map.setPaintProperty('layer-isochrone-fill', 'fill-opacity', [
+        'case',
+        ['==', ['get', 'ring'], '30min'], e * 0.15,
+        ['==', ['get', 'ring'], '60min'], e * 0.10,
+        e * 0.08,
+      ]);
+
+    // 3) Isochrone strokes fade-in
+    for (const s of ['30', '60', '120']) {
+      const lid = `layer-isochrone-stroke-${s}`;
+      if (map.getLayer(lid)) map.setPaintProperty(lid, 'line-opacity', e * 0.8);
+    }
+
+    // 4) Radiology markers: orange -> cyan color transition
+    const r = Math.round(255 * (1 - e));
+    const g = Math.round(107 + 105 * e);
+    const b = Math.round(53 + 202 * e);
+    map.setPaintProperty('layer-markers', 'circle-color', [
+      'case', ['==', ['get', '_isRadiology'], 1], `rgb(${r},${g},${b})`, '#FF6B35',
+    ]);
+
+    // 5) Non-radiology markers: dim opacity 1 -> 0.2
+    map.setPaintProperty('layer-markers', 'circle-opacity', [
+      'case', ['==', ['get', '_isRadiology'], 1], 1.0, 1.0 - e * 0.8,
+    ]);
+
+    // 6) Non-radiology glow: dim
+    map.setPaintProperty('layer-glow', 'circle-opacity', [
+      'case', ['==', ['get', '_isRadiology'], 1], 0.2, Math.max(0.03, 0.2 * (1 - e)),
+    ]);
+
+    // 7) Radiology markers: grow +2px
+    map.setPaintProperty('layer-markers', 'circle-radius', [
+      'case', ['==', ['get', '_isRadiology'], 1],
+      ['interpolate', ['linear'], ['zoom'], 4, 3 + e * 2, 8, 5 + e * 2, 12, 7 + e * 2, 16, 10 + e * 2, 20, 14 + e * 2],
+      ['interpolate', ['linear'], ['zoom'], 4, 3, 8, 5, 12, 7, 16, 10, 20, 14],
+    ]);
+
+    // 8) Non-radiology stroke: dim
+    map.setPaintProperty('layer-markers', 'circle-stroke-color', [
+      'case', ['==', ['get', '_isRadiology'], 1],
+      'rgba(255,255,255,0.9)',
+      `rgba(255,255,255,${(0.9 * (1 - e * 0.89)).toFixed(2)})`,
+    ]);
+
+    if (raw < 1) {
+      requestAnimationFrame(tick);
+    } else {
+      // Final zoom-dependent heatmap opacity
+      map.setPaintProperty('layer-desert-heatmap', 'heatmap-opacity', [
+        'interpolate', ['linear'], ['zoom'], 0, 0.7, 5, 0.6, 12, 0.3,
+      ]);
+      startDesertPulse();
+    }
+  }
+  requestAnimationFrame(tick);
+}
+
+function startDesertPulse(): void {
+  if (desertPulseTimer) return;
+  const t0 = performance.now();
+  desertPulseTimer = setInterval(() => {
+    if (!desertModeActive || !map.getLayer('layer-markers')) { stopDesertPulse(); return; }
+    const elapsed = (performance.now() - t0) / 1000;
+    const pulse = Math.sin(elapsed * 2.5);
+    const offset = pulse * 3;
+    const glowOp = 0.25 + pulse * 0.1;
+    map.setPaintProperty('layer-markers', 'circle-radius', [
+      'case', ['==', ['get', '_isRadiology'], 1],
+      ['interpolate', ['linear'], ['zoom'], 4, 5 + offset, 8, 7 + offset, 12, 9 + offset, 16, 12 + offset, 20, 16 + offset],
+      ['interpolate', ['linear'], ['zoom'], 4, 3, 8, 5, 12, 7, 16, 10, 20, 14],
+    ]);
+    map.setPaintProperty('layer-glow', 'circle-opacity', [
+      'case', ['==', ['get', '_isRadiology'], 1], glowOp, 0.03,
+    ]);
+  }, 50) as any;
+}
+
+function stopDesertPulse(): void {
+  if (desertPulseTimer) { clearInterval(desertPulseTimer); desertPulseTimer = null; }
+}
+
+function toggleDesertMode(active: boolean): void {
+  desertModeActive = active;
+  if (active) {
+    if (!desertLayersRendered) renderDesertHeatmap();
+    if (!desertLayersRendered) return; // no radiology facilities found
+
+    // Reset opacities for animation
+    map.setPaintProperty('layer-desert-heatmap', 'heatmap-opacity', 0);
+    map.setPaintProperty('layer-isochrone-fill', 'fill-opacity', 0);
+    for (const s of ['30', '60', '120'])
+      map.setPaintProperty(`layer-isochrone-stroke-${s}`, 'line-opacity', 0);
+
+    // Ensure visible
+    map.setLayoutProperty('layer-desert-heatmap', 'visibility', 'visible');
+    map.setLayoutProperty('layer-isochrone-fill', 'visibility', 'visible');
+    for (const s of ['30', '60', '120'])
+      map.setLayoutProperty(`layer-isochrone-stroke-${s}`, 'visibility', 'visible');
+
+    // Show gap circles too if they exist
+    if (map.getLayer('desert-circles')) {
+      map.setLayoutProperty('desert-circles', 'visibility', 'visible');
+      map.setLayoutProperty('desert-labels', 'visibility', 'visible');
+    }
+
+    animateDesertReveal();
+  } else {
+    stopDesertPulse();
+    if (desertLayersRendered) {
+      map.setLayoutProperty('layer-desert-heatmap', 'visibility', 'none');
+      map.setLayoutProperty('layer-isochrone-fill', 'visibility', 'none');
+      for (const s of ['30', '60', '120'])
+        map.setLayoutProperty(`layer-isochrone-stroke-${s}`, 'visibility', 'none');
+    }
+    if (map.getLayer('desert-circles')) {
+      map.setLayoutProperty('desert-circles', 'visibility', 'none');
+      map.setLayoutProperty('desert-labels', 'visibility', 'none');
+    }
+    // Restore marker styling
+    map.setPaintProperty('layer-markers', 'circle-color', '#FF6B35');
+    map.setPaintProperty('layer-markers', 'circle-opacity', 1);
+    map.setPaintProperty('layer-markers', 'circle-stroke-color', 'rgba(255,255,255,0.9)');
+    map.setPaintProperty('layer-markers', 'circle-radius',
+      ['interpolate', ['linear'], ['zoom'], 4, 3, 8, 5, 12, 7, 16, 10, 20, 14]);
+    map.setPaintProperty('layer-glow', 'circle-opacity', 0.2);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // DETAIL CARD + 3D MODEL + NARRATION
 // ═══════════════════════════════════════════════════════════════
 function showDetail(props: any, lngLat: any): void {
@@ -581,10 +969,7 @@ function toggleLayer(name: string): void {
       $('heatmap-legend').classList.toggle('show', on);
       break;
     case 'deserts':
-      if (map.getLayer('desert-circles')) {
-        map.setLayoutProperty('desert-circles', 'visibility', on ? 'visible' : 'none');
-        map.setLayoutProperty('desert-labels', 'visibility', on ? 'visible' : 'none');
-      }
+      toggleDesertMode(on);
       break;
   }
 }
@@ -795,22 +1180,22 @@ function applyToolData(): void {
     applyRegionHighlight(data.highlight_region);
   }
 
-  // -- Desert mode: render gap circles directly --
-  if (data.mode === 'deserts' && data.gaps?.length > 0) {
-    // Skip fitBounds when highlight_region already controls the camera
-    renderDesertGaps(data.gaps, hasHighlightRegion);
+  // -- Desert mode: render heatmap + gap circles --
+  if (data.mode === 'deserts') {
+    if (data.gaps?.length > 0) {
+      renderDesertGaps(data.gaps, hasHighlightRegion);
+    }
+    toggleDesertMode(true);
     layerState.deserts = true;
     $('tog-deserts').classList.add('on');
-
-    // Turn on heatmap for visual density context
-    if (!layerState.heatmap) toggleLayer('heatmap');
-
-    showApiStatus(`${data.gap_count || data.gaps.length} coverage gaps for ${data.query?.condition || 'specialty'}`, true);
+    showApiStatus(`${data.gap_count || data.gaps?.length || 0} coverage gaps for ${data.query?.condition || 'specialty'}`, true);
   }
 
   // -- Narrative focus overlays --
-  if (data.narrative_focus === 'deserts' && !layerState.heatmap) {
-    toggleLayer('heatmap');
+  if (data.narrative_focus === 'deserts' && !desertModeActive) {
+    toggleDesertMode(true);
+    layerState.deserts = true;
+    $('tog-deserts').classList.add('on');
   }
 
   // -- Impact mode: add pulsing deployment marker at recommended point --
