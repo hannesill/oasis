@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "^1.0.0",
-    "mapbox-gl": "^3.9.0",
+    "mapbox-gl": "^3.18.0",
     "three": "^0.126.0"
   },
   "devDependencies": {

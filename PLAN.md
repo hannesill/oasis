@@ -13,7 +13,7 @@ The `geo_map` MCP App (`src/oasis/apps/geo_map/`) is working:
 
 ```
 0:00 - 0:10  "Where are surgical deserts in Northern Ghana?"
-             → Hex grid appears, red zones pulse, camera flies to Northern region
+             → Heatmap lights up, red zones pulse, camera flies to Northern region
 
 0:10 - 0:20  Click worst gap → "150km to nearest surgeon"
              Click anomalous facility → "Claims 50 surgeries/month, only 2 staff"
@@ -34,11 +34,11 @@ The `geo_map` MCP App (`src/oasis/apps/geo_map/`) is working:
 
 **Must Build:**
 1. ⭐ **Model → UI data passing** — Eliminate duplicate queries, enable model control
-2. ⭐ **H3 hex grid** — THE signature visual (red = deserts, green = coverage)
-3. ⭐ **Anomaly highlighting** — Warning badges on problematic facilities
-4. ⭐ **Impact heatmap** — Shows where new facilities help most
+2. ⭐ **Anomaly highlighting** — Warning badges on problematic facilities
+3. ⭐ **Impact heatmap** — Shows where new facilities help most
 
 **Cut from scope:**
+- ❌ H3 hex grid (existing heatmap tells the same story, 3h not worth it)
 - ❌ Interactive filters (model controls everything, no user interaction in 45 sec)
 - ❌ Patient routing (doesn't score high enough for time cost)
 - ❌ 3D buildings, ElevenLabs narration (distractions)
@@ -53,32 +53,13 @@ Model passes query results directly to UI via `ontoolresult`. Tool accepts `mode
 
 ---
 
-## Phase 2: H3 Hex Grid ⭐ 3 hours
+## Phase 2: H3 Hex Grid — ❌ CUT
 
-**Goal:** THE signature visual. Red hexes = medical deserts, green = coverage. 3D extrusion by density.
-
-**Build:**
-
-1. **Add `h3-js`** to `package.json`
-
-2. **Hex grid** in `mcp-app.ts`:
-   - `computeHexGrid(facilities, resolution=4)` → count per hex
-   - `addHexLayer(map, hexGeoJSON)`:
-     - `fill-extrusion` layer
-     - Color: 0-1 facilities = red `#ef4444`, 2-5 = amber, 5+ = green `#22c55e`
-     - Height: 0 → 0m, max → 40000m
-   - Auto-show at zoom ≤ 8 (hide markers)
-   - Auto-hide at zoom > 8 (show markers)
-
-3. **Pulse animation** on red hexes (deserts):
-   - Subtle opacity pulse: 0.5 → 0.8 → 0.5 (2 sec cycle)
-   - Only on hexes with count = 0
-
-**Verify:** `geo_map(mode="deserts", condition="surgery")` → Red hexes pulse in Northern Ghana, green extrusions in Accra
+Existing Mapbox heatmap already visualizes deserts (red) vs coverage (green). Same story, no extra dependency. Time reallocated to Phase 3.
 
 ---
 
-## Phase 3: Anomaly + Impact Overlay ⭐ 5 hours
+## Phase 3: Anomaly + Impact Overlay ⭐ 8 hours
 
 **Goal:** Demo beats #2 ("Does this facility really do surgery?") and #4 ("Where to place a surgeon?"). Show data inconsistencies and optimal resource placement.
 
@@ -118,13 +99,12 @@ Model passes query results directly to UI via `ontoolresult`. Tool accepts `mode
 **Total: 12 hours** — Build phases sequentially in priority order:
 
 1. **Phase 1** ~~(4h)~~ — Model → UI data flow ✅ DONE
-2. **Phase 2** (3h) — H3 hex grid [SIGNATURE VISUAL]
-3. **Phase 3** (5h) — Anomaly + Impact [DEMO BEATS #2 + #4]
+2. ~~**Phase 2** (3h) — H3 hex grid~~ ❌ CUT — existing heatmap suffices
+3. **Phase 3** (8h) — Anomaly + Impact [DEMO BEATS #2 + #4] ← all remaining time here
 
 **Assignment:**
-- **Hannes:** Phase 1 (data flow, tool params)
-- **Fourth Member (Map Dev):** Phase 2 (h3-js, hex rendering)
-- **Jakob:** Phase 3 (anomaly integration, impact heatmap)
+- **Hannes:** Phase 1 (data flow, tool params) ✅ DONE
+- **Fourth Member (Map Dev) + Jakob:** Phase 3 (anomaly integration, impact heatmap)
 
 **Required env vars:**
 - `MAPBOX_TOKEN` (get from Mapbox, free tier)
