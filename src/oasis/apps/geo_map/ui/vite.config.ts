@@ -5,6 +5,7 @@ import { resolve } from "path";
 export default defineConfig({
   plugins: [viteSingleFile()],
   root: "src",
+  envDir: resolve(__dirname, "../../../../.."),
   publicDir: false,
   build: {
     outDir: resolve(__dirname, ".."),

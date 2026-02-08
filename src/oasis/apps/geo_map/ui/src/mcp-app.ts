@@ -13,6 +13,7 @@ import {
   applyHostFonts,
   type McpUiHostContext,
 } from "@modelcontextprotocol/ext-apps";
+import { isDevMode, getMockToolResult, getMockGeocodeFacilities } from "./dev-mock";
 
 // Import mapbox-gl and three.js as bundled modules (no CDN!)
 import mapboxgl from 'mapbox-gl';
@@ -89,6 +90,13 @@ function showApiStatus(msg: string, ok: boolean): void {
  * Call an MCP tool via the App SDK and parse the JSON result
  */
 async function callTool(name: string, args: Record<string, unknown>): Promise<any> {
+  // Dev mode: return mock data instead of calling MCP
+  if (isDevMode()) {
+    console.log(`[DEV] Mock callTool: ${name}`, args);
+    if (name === 'geocode_facilities') return getMockGeocodeFacilities();
+    return {};
+  }
+
   const result = await app.callServerTool({ name, arguments: args });
   const textContent = result.content?.find((c: any) => c.type === "text");
   if (textContent && "text" in textContent) {
@@ -679,15 +687,36 @@ document.querySelectorAll('[data-fly]').forEach(btn => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// CONNECT TO HOST
+// CONNECT TO HOST (or start in dev mode)
 // ═══════════════════════════════════════════════════════════════
-app.connect().then(() => {
-  const ctx = app.getHostContext();
-  if (ctx) applyHostContext(ctx);
+if (isDevMode()) {
+  // Dev mode: skip MCP connection, inject mock data, init map directly
+  console.log('[OASIS] Dev mode — using mock data. Set VITE_MAPBOX_TOKEN in ui/.env');
+  const mockResult = getMockToolResult();
+  MAPBOX_TOKEN = mockResult.config.mapbox_token;
+  ELEVENLABS_API_KEY = mockResult.config.elevenlabs_api_key || '';
+  pendingToolData = mockResult;
+  if (!MAPBOX_TOKEN) {
+    document.getElementById('loader')!.innerHTML = `
+      <div style="color:#FF6B35;font-size:16px;text-align:center;padding:20px;font-family:system-ui">
+        <div style="font-size:32px;margin-bottom:16px">🗺️</div>
+        <strong>VITE_MAPBOX_TOKEN not set</strong><br><br>
+        Create <code style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px">src/oasis/apps/geo_map/ui/.env</code> with:<br>
+        <code style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px">VITE_MAPBOX_TOKEN=pk.ey...</code><br><br>
+        Then restart <code style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px">npm run dev</code>
+      </div>`;
+  } else {
+    initMap();
+  }
+} else {
+  app.connect().then(() => {
+    const ctx = app.getHostContext();
+    if (ctx) applyHostContext(ctx);
 
-  // Request initial iframe height from the host
-  app.sendSizeChanged({ width: 0, height: 600 });
+    // Request initial iframe height from the host
+    app.sendSizeChanged({ width: 0, height: 600 });
 
-  console.log('[OASIS] Connected to Claude Desktop via MCP');
-});
+    console.log('[OASIS] Connected to Claude Desktop via MCP');
+  });
+}
 
