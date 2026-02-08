@@ -1,0 +1,24 @@
+OASIS ARCHITECTURE DIAGRAM — EXACT SCRIPT
+==========================================
+(Architecture explanation only — no demo)
+
+[0:00-0:10] USER LAYER
+----------------------
+This is OASIS: Orchestrated Agentic System for Intelligent Healthcare Synthesis. It all starts at the top with the USER layer, where a user asks questions in natural language. That question then flows to Claude Desktop's MCP Client, where Anthropic Claude performs agent reasoning to understand the intent. And the result? An interactive 3D map visualization appears, embedded directly in Claude Desktop.
+
+[0:10-0:22] ORCHESTRATION LAYER
+--------------------------------
+Now, behind the scenes, the MCP Protocol connects Claude to our OASIS orchestration server. Think of OASIS as the brain of the system — it manages three critical registries that coordinate everything. The Tool Registry routes requests to our specialized tools. The Dataset Registry handles our 1,002 Ghana healthcare facilities. And finally, the MCP Apps Protocol launches interactive visualizations like our map.
+
+[0:22-0:40] SERVICES LAYER
+--------------------------
+From there, OASIS orchestrates three powerful service layers. First, we have Geospatial Tools — five functions that find facilities in radius, detect coverage gaps, calculate distances, geocode locations to latitude and longitude, and count facilities. Next, our Geomap Application — powered by Mapbox GL JS for real-time rendering, Three.js for 3D models, creating medical desert heatmaps that visualize gaps in real-time. And third, Databricks Integration — where Genie converts natural language to SQL queries, MLflow traces every tool call for citation transparency, and RAG semantic search finds facilities by meaning, not keywords.
+
+[0:40-0:55] DATA LAYER
+----------------------
+But all of these services need data to work, which brings us to our data foundation. DuckDB Local Analytics stores our VF Ghana Parquet dataset — 1,002 healthcare facilities ready for fast SQL queries. Data Sanity & Anomalies uses Google Geocoding API for precise coordinates, performs column harmonization, and generates anomaly risk summaries to flag data inconsistencies. And our Embeddings Cache stores semantic vectors using both databricks-bge-large-en and all-MiniLM-L6-v2 models, enabling RAG search that understands meaning, not just keywords.
+
+[0:55-1:00] COMPLETE FLOW
+-------------------------
+So when you put it all together, one question flows through all four layers — from natural language to orchestration, through specialized services, powered by rich data. That's OASIS: Orchestrated Agentic System for Intelligent Healthcare Synthesis. Bridging medical deserts, one conversation at a time.
+

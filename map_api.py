@@ -96,7 +96,30 @@ app.add_middleware(
 
 @app.get("/")
 async def index():
-    return FileResponse("map_local_test.html")
+    """Enhanced version with professional UI, animations, and pin markers."""
+    return FileResponse("map_enhanced.html")
+
+
+@app.get("/enhanced")
+async def enhanced():
+    """Enhanced version with professional UI, animations, and pin markers."""
+    return FileResponse("map_enhanced.html")
+
+
+@app.get("/oasis_logo.jpeg")
+async def logo():
+    logo_path = Path(__file__).parent / "docs" / "logo" / "oasis_logo.jpeg"
+    if not logo_path.exists():
+        return JSONResponse({"error": "Logo file not found"}, status_code=404)
+    return FileResponse(logo_path, media_type="image/jpeg")
+
+
+@app.get("/oasis_palm.jpeg")
+async def palm():
+    palm_path = Path(__file__).parent / "docs" / "logo" / "oasis_palm.jpeg"
+    if not palm_path.exists():
+        return JSONResponse({"error": "Palm file not found"}, status_code=404)
+    return FileResponse(palm_path, media_type="image/jpeg")
 
 
 @app.get("/facilities.geojson")
