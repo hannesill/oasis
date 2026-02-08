@@ -264,7 +264,11 @@ def _csv_to_parquet_all(src_root: Path, parquet_root: Path) -> bool:
         OASIS_DUCKDB_THREADS     (default: 2)
     """
     parquet_paths: list[Path] = []
-    csv_files = list(src_root.rglob("*.csv.gz")) + list(src_root.rglob("*.csv"))
+    csv_files = [
+        f
+        for f in list(src_root.rglob("*.csv.gz")) + list(src_root.rglob("*.csv"))
+        if not any(part.startswith(".") for part in f.relative_to(src_root).parts)
+    ]
     if not csv_files:
         logger.error(f"No CSV files found in {src_root}")
         return False
@@ -430,8 +434,12 @@ def _create_duckdb_with_views(
         raise
 
     try:
-        # Find all parquet files
-        parquet_files = list(parquet_root.rglob("*.parquet"))
+        # Find all parquet files (skip hidden directories like .venv)
+        parquet_files = [
+            f
+            for f in parquet_root.rglob("*.parquet")
+            if not any(part.startswith(".") for part in f.relative_to(parquet_root).parts)
+        ]
         if not parquet_files:
             logger.error(f"No Parquet files found in {parquet_root}")
             return False
@@ -482,8 +490,8 @@ def _create_duckdb_with_views(
                                 f"skipping {pq}"
                             )
                             continue
-                    table_name = rel.stem.lower()
-                    view_name = f"{schema_name}.{table_name}"
+                    table_name = rel.stem.lower().replace("-", "_").replace(".", "_")
+                    view_name = f'"{schema_name}"."{table_name}"'
                 else:
                     # Flat naming for backward compat
                     parts = [*list(rel.parent.parts), rel.stem]

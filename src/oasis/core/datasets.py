@@ -210,7 +210,7 @@ class DatasetRegistry:
         vf_ghana = DatasetDefinition(
             name="vf-ghana",
             description="Virtue Foundation Ghana Healthcare Facilities",
-            primary_verification_table="vf.facilities",
+            primary_verification_table="vf.vf_ghana",
             modalities=frozenset({Modality.TABULAR}),
             schema_mapping={"": "vf"},
         )
