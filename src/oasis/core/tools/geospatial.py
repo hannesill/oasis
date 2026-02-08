@@ -344,6 +344,7 @@ class FindCoverageGapsInput(ToolInput):
 
     procedure_or_specialty: str  # e.g., "cardiology", "cataract surgery"
     min_gap_km: float = 50.0  # Minimum distance to consider a "gap"
+    region: str | None = None  # e.g., "Northern" — constrain to this region
     limit: int = 10
 
 
@@ -619,6 +620,28 @@ class FindFacilitiesInRadiusTool:
         return True
 
 
+# Approximate bounding boxes for Ghana's regions (for grid constraint)
+GHANA_REGION_BOUNDS: dict[str, dict[str, float]] = {
+    "northern": {"lat_min": 8.5, "lat_max": 10.5, "lng_min": -2.5, "lng_max": 0.5},
+    "upper east": {"lat_min": 10.2, "lat_max": 11.2, "lng_min": -1.3, "lng_max": 0.0},
+    "upper west": {"lat_min": 9.6, "lat_max": 11.0, "lng_min": -3.0, "lng_max": -1.5},
+    "ashanti": {"lat_min": 6.0, "lat_max": 7.5, "lng_min": -2.5, "lng_max": -0.5},
+    "greater accra": {"lat_min": 5.3, "lat_max": 6.0, "lng_min": -0.5, "lng_max": 0.5},
+    "western": {"lat_min": 4.5, "lat_max": 6.0, "lng_min": -3.3, "lng_max": -1.5},
+    "eastern": {"lat_min": 5.5, "lat_max": 7.0, "lng_min": -1.5, "lng_max": 0.5},
+    "central": {"lat_min": 5.0, "lat_max": 6.0, "lng_min": -2.0, "lng_max": -0.5},
+    "volta": {"lat_min": 5.5, "lat_max": 8.5, "lng_min": -0.5, "lng_max": 1.2},
+    "brong-ahafo": {"lat_min": 6.5, "lat_max": 8.5, "lng_min": -3.0, "lng_max": -0.5},
+    "bono": {"lat_min": 7.0, "lat_max": 8.5, "lng_min": -3.0, "lng_max": -1.5},
+    "bono east": {"lat_min": 7.0, "lat_max": 8.5, "lng_min": -1.5, "lng_max": 0.0},
+    "ahafo": {"lat_min": 6.5, "lat_max": 7.5, "lng_min": -3.0, "lng_max": -1.5},
+    "savannah": {"lat_min": 8.0, "lat_max": 10.0, "lng_min": -2.5, "lng_max": -0.5},
+    "north east": {"lat_min": 10.0, "lat_max": 11.0, "lng_min": -0.5, "lng_max": 0.5},
+    "oti": {"lat_min": 7.5, "lat_max": 9.0, "lng_min": -0.5, "lng_max": 1.0},
+    "western north": {"lat_min": 5.5, "lat_max": 7.0, "lng_min": -3.0, "lng_max": -2.0},
+}
+
+
 class FindCoverageGapsTool:
     """Identify geographic cold spots where critical procedures are absent.
 
@@ -628,7 +651,7 @@ class FindCoverageGapsTool:
 
     Algorithm:
     1. Find all facilities offering the specified procedure/specialty
-    2. Create a grid of points across Ghana
+    2. Create a grid of points across the target area
     3. For each grid point, find nearest facility distance
     4. Return grid points where nearest facility > min_gap_km
 
@@ -640,14 +663,15 @@ class FindCoverageGapsTool:
     description = (
         "Identify geographic 'cold spots' — areas where a critical medical "
         "procedure or specialty is absent within a specified distance. "
-        "Reveals medical deserts and coverage gaps."
+        "Reveals medical deserts and coverage gaps. "
+        "Optionally filter by region (e.g. 'Northern') to focus the analysis."
     )
     input_model = FindCoverageGapsInput
 
     required_modalities: frozenset[Modality] = frozenset({Modality.TABULAR})
     supported_datasets: frozenset[str] | None = frozenset({"vf-ghana"})
 
-    # Ghana bounding box for grid generation
+    # Ghana bounding box for grid generation (full country fallback)
     GHANA_BOUNDS = {
         "lat_min": 4.5,
         "lat_max": 11.2,
@@ -656,6 +680,18 @@ class FindCoverageGapsTool:
     }
     GRID_STEP = 0.5  # ~55km resolution
 
+    def _get_bounds(self, region: str | None) -> dict[str, float]:
+        """Get bounding box for grid generation, constrained to region if given."""
+        if region:
+            key = region.strip().lower()
+            # Try exact match first, then substring match
+            if key in GHANA_REGION_BOUNDS:
+                return GHANA_REGION_BOUNDS[key]
+            for rname, bounds in GHANA_REGION_BOUNDS.items():
+                if key in rname or rname in key:
+                    return bounds
+        return self.GHANA_BOUNDS
+
     def invoke(
         self, dataset: DatasetDefinition, params: FindCoverageGapsInput
     ) -> dict[str, Any]:
@@ -663,6 +699,15 @@ class FindCoverageGapsTool:
 
         # Find facilities with the specified capability
         spec = params.procedure_or_specialty.replace("'", "''").lower()
+
+        region_filter_sql = ""
+        if params.region:
+            region_esc = params.region.replace("'", "''")
+            region_filter_sql = (
+                f"AND LOWER(address_stateOrRegion) LIKE "
+                f"'%{region_esc.lower()}%'"
+            )
+
         sql = f"""
             SELECT
                 name,
@@ -684,6 +729,7 @@ class FindCoverageGapsTool:
                     OR LOWER(equipment) LIKE '%{spec}%'
                     OR LOWER(description) LIKE '%{spec}%'
                 )
+                {region_filter_sql}
         """
 
         result = backend.execute_query(sql, dataset)
@@ -699,8 +745,8 @@ class FindCoverageGapsTool:
                 city = str(row.get("address_city", "")).strip()
                 coords = resolve_location(city)
                 if coords is None:
-                    region = str(row.get("address_stateOrRegion", "")).strip()
-                    coords = resolve_location(region)
+                    rgn = str(row.get("address_stateOrRegion", "")).strip()
+                    coords = resolve_location(rgn)
                 if coords:
                     facility_coords.append(
                         {
@@ -711,24 +757,30 @@ class FindCoverageGapsTool:
                         }
                     )
 
+        region_label = f" in {params.region}" if params.region else " in Ghana"
+
         if not facility_coords:
             return {
                 "procedure_or_specialty": params.procedure_or_specialty,
+                "region": params.region,
                 "min_gap_km": params.min_gap_km,
                 "total_facilities_found": 0,
                 "gaps": [],
+                "gap_count": 0,
                 "summary": (
-                    f"No facilities found offering '{params.procedure_or_specialty}'. "
-                    f"The entire country is a coverage gap for this service."
+                    f"No facilities found offering "
+                    f"'{params.procedure_or_specialty}'{region_label}. "
+                    f"The entire area is a coverage gap for this service."
                 ),
             }
 
-        # Generate grid across Ghana
+        # Generate grid — constrained to region if specified
+        bounds = self._get_bounds(params.region)
         gaps = []
-        lat = self.GHANA_BOUNDS["lat_min"]
-        while lat <= self.GHANA_BOUNDS["lat_max"]:
-            lng = self.GHANA_BOUNDS["lng_min"]
-            while lng <= self.GHANA_BOUNDS["lng_max"]:
+        lat = bounds["lat_min"]
+        while lat <= bounds["lat_max"]:
+            lng = bounds["lng_min"]
+            while lng <= bounds["lng_max"]:
                 # Find nearest facility to this grid point
                 min_dist = float("inf")
                 nearest_facility = None
@@ -777,8 +829,8 @@ class FindCoverageGapsTool:
         summary = (
             f"Found {len(gaps)} coverage gap areas where "
             f"'{params.procedure_or_specialty}' is absent within "
-            f"{params.min_gap_km} km. "
-            f"{len(facility_coords)} facilities offer this service in Ghana. "
+            f"{params.min_gap_km} km{region_label}. "
+            f"{len(facility_coords)} facilities offer this service. "
         )
         if gaps:
             worst = gaps[0]
@@ -789,6 +841,7 @@ class FindCoverageGapsTool:
 
         return {
             "procedure_or_specialty": params.procedure_or_specialty,
+            "region": params.region,
             "min_gap_km": params.min_gap_km,
             "total_facilities_found": len(facility_coords),
             "gaps": gaps,

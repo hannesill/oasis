@@ -430,6 +430,7 @@ def find_facilities_in_radius(
 def find_coverage_gaps(
     procedure_or_specialty: str,
     min_gap_km: float = 50.0,
+    region: str | None = None,
 ) -> str:
     """🏜️ Find medical deserts — areas lacking critical medical capabilities.
 
@@ -439,6 +440,7 @@ def find_coverage_gaps(
     Args:
         procedure_or_specialty: The specialty or procedure to check for.
         min_gap_km: Minimum distance to flag as a desert (default: 50 km).
+        region: Optional region name (e.g. "Northern") to constrain the analysis.
 
     Returns:
         List of desert areas with severity rankings.
@@ -458,6 +460,7 @@ def find_coverage_gaps(
             FindCoverageGapsInput(
                 procedure_or_specialty=procedure_or_specialty,
                 min_gap_km=min_gap_km,
+                region=region,
             ),
         )
         return json.dumps(result)

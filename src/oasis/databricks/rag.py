@@ -52,7 +52,7 @@ class FacilitySearchEngine:
         sql = """
             SELECT pk_unique_id, name, address_city,
                    procedure, equipment, capability
-            FROM vf.facilities
+            FROM vf.vf_ghana
         """
         result = backend.execute_query(sql, dataset)
         if result.error or result.dataframe is None:
@@ -158,7 +158,7 @@ class FacilitySearchEngine:
         sql = f"""
             SELECT pk_unique_id, name, address_city,
                    procedure, equipment, capability
-            FROM vf.facilities
+            FROM vf.vf_ghana
             WHERE {' OR '.join(word_clauses)}
             LIMIT {top_k}
         """

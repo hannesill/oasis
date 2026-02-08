@@ -88,8 +88,25 @@ class GeoMapTool:
                 FindCoverageGapsInput(
                     procedure_or_specialty=params.condition,
                     min_gap_km=params.radius_km,
+                    region=params.highlight_region,
                 ),
             )
+
+            gaps = result.get("gaps", [])
+
+            # For impact narrative: pick the worst gap as deployment target
+            recommended = None
+            if params.narrative_focus == "impact" and gaps:
+                worst = gaps[0]  # Already sorted by distance desc
+                recommended = {
+                    "lat": worst["lat"],
+                    "lng": worst["lng"],
+                    "nearest_city": worst["nearest_city"],
+                    "nearest_facility_distance_km": worst[
+                        "nearest_facility_distance_km"
+                    ],
+                }
+
             return {
                 "mode": "deserts",
                 "query": {
@@ -99,7 +116,8 @@ class GeoMapTool:
                 "summary": result.get("summary", ""),
                 "gap_count": result.get("gap_count", 0),
                 "total_facilities": result.get("total_facilities_found", 0),
-                "gaps": result.get("gaps", []),
+                "gaps": gaps,
+                "recommended_deployment": recommended,
                 **ui_control,
             }
         else:

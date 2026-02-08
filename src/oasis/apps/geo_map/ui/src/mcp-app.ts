@@ -40,7 +40,6 @@ let layerState = { markers: true, heatmap: false, deserts: false };
 let current3DModel: string | null = null;
 let audioElement: HTMLAudioElement | null = null;
 let currentFacilityCoords: [number, number] | null = null;
-let allSpecialties: string[] = [];
 
 // Tool result data — stored by ontoolresult, consumed after map loads
 let pendingToolData: any = null;
@@ -159,21 +158,39 @@ function initMap(): void {
     // Determine intro camera target — tool data can override the default
     const toolTarget = resolveToolCameraTarget();
 
-    // Intro animation
+    // Intro animation — cinematic two-phase zoom
     setTimeout(() => {
       $('loader').classList.add('gone');
       if (toolTarget) {
-        // Model-driven fly-to (highlight_region or search center)
-        map.flyTo({ center: toolTarget.center, zoom: toolTarget.zoom, pitch: toolTarget.pitch, bearing: -15, duration: 4000, essential: true });
+        // Phase 1: Globe → West Africa overview (2.5s)
+        map.flyTo({
+          center: [-1.0, 8.0],
+          zoom: 4.5,
+          pitch: 0,
+          bearing: 0,
+          duration: 2500,
+          essential: true,
+        });
+        // Phase 2: West Africa → Target region with cinematic tilt (2.5s)
+        setTimeout(() => {
+          map.flyTo({
+            center: toolTarget.center,
+            zoom: Math.max(toolTarget.zoom, 8),
+            pitch: 50,
+            bearing: -15,
+            duration: 2500,
+            essential: true,
+          });
+        }, 2700);
       } else {
         // Default: fly to Ghana overview
         map.flyTo({ center: [-1.0232, 7.9465], zoom: 6.5, pitch: 50, bearing: -15, duration: 4000, essential: true });
       }
-    }, 2200);
+    }, 600);
 
-    // Apply tool data (deserts, search results, narrative focus) after a short delay
-    // so the fly-to animation has started
-    setTimeout(() => { applyToolData(); }, 2800);
+    // Apply tool data (deserts, region highlight) during Phase 2
+    // so overlays appear as the camera dives in
+    setTimeout(() => { applyToolData(); }, 3800);
   });
 
   // Timeout fallback — don't leave user stuck on loader forever
@@ -195,17 +212,6 @@ async function loadFacilitiesViaMCP(): Promise<void> {
     showApiStatus('Loading facilities via MCP…', true);
     const data = await callTool('geocode_facilities', {});
     facilitiesGeoJSON = data.geojson || { type: 'FeatureCollection', features: [] };
-
-    // Compute stats
-    const cities = new Set<string>();
-    const specs = new Set<string>();
-    facilitiesGeoJSON.features.forEach((f: any) => {
-      const p = f.properties;
-      if (p.city) cities.add(p.city);
-      try { JSON.parse(p.specialties || '[]').forEach((s: string) => specs.add(s)); } catch (e) { /* ignore */ }
-    });
-
-    allSpecialties = [...specs].sort();
 
     showApiStatus(`Loaded ${facilitiesGeoJSON.features.length} facilities`, true);
   } catch (err: any) {
@@ -331,8 +337,7 @@ function addMapLayers(): void {
   map.on('mouseenter', 'layer-markers', () => { map.getCanvas().style.cursor = 'pointer'; });
   map.on('mouseleave', 'layer-markers', () => { map.getCanvas().style.cursor = ''; });
 
-  // Glow layer as fallback click target
-  map.on('click', 'layer-glow', handleClick);
+  // Glow layer — pointer cursor only (click handled by markers layer above)
   map.on('mouseenter', 'layer-glow', () => { map.getCanvas().style.cursor = 'pointer'; });
   map.on('mouseleave', 'layer-glow', () => { map.getCanvas().style.cursor = ''; });
 
@@ -367,7 +372,7 @@ function addMapLayers(): void {
 // ═══════════════════════════════════════════════════════════════
 // COVERAGE GAPS RENDER
 // ═══════════════════════════════════════════════════════════════
-function renderDesertGaps(gaps: any[]): void {
+function renderDesertGaps(gaps: any[], skipFitBounds = false): void {
   if (map.getSource('desert-gaps')) {
     if (map.getLayer('desert-circles')) map.removeLayer('desert-circles');
     if (map.getLayer('desert-labels')) map.removeLayer('desert-labels');
@@ -400,11 +405,123 @@ function renderDesertGaps(gaps: any[]): void {
     paint: { 'text-color': '#FF5252', 'text-halo-color': '#000', 'text-halo-width': 1 },
   });
 
-  if (gaps.length > 0) {
+  if (gaps.length > 0 && !skipFitBounds) {
     const bounds = new mapboxgl.LngLatBounds();
     gaps.forEach(g => bounds.extend([g.lng, g.lat]));
     map.fitBounds(bounds, { padding: 80, pitch: 30, duration: 2000 });
   }
+}
+
+/**
+ * Render a pulsing deployment marker at the recommended placement point.
+ * Used for narrative_focus="impact" to show where a surgical team should go.
+ */
+function renderDeploymentMarker(dep: { lat: number; lng: number; nearest_city: string; nearest_facility_distance_km: number }): void {
+  console.log('[OASIS] renderDeploymentMarker:', dep);
+
+  // Clean up previous deployment layers
+  if (map.getLayer('deploy-pulse-outer')) map.removeLayer('deploy-pulse-outer');
+  if (map.getLayer('deploy-pulse-inner')) map.removeLayer('deploy-pulse-inner');
+  if (map.getLayer('deploy-label')) map.removeLayer('deploy-label');
+  if (map.getSource('deploy-point')) map.removeSource('deploy-point');
+
+  const feature = {
+    type: 'FeatureCollection',
+    features: [{
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [dep.lng, dep.lat] },
+      properties: { city: dep.nearest_city, distance_km: dep.nearest_facility_distance_km }
+    }]
+  };
+
+  map.addSource('deploy-point', { type: 'geojson', data: feature });
+
+  // Outer pulsing ring — animated via opacity + radius
+  map.addLayer({
+    id: 'deploy-pulse-outer', type: 'circle', source: 'deploy-point',
+    slot: 'top',
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 40, 9, 60, 12, 80],
+      'circle-color': 'rgba(0, 255, 136, 0.15)',
+      'circle-stroke-width': 3,
+      'circle-stroke-color': 'rgba(0, 255, 136, 0.6)',
+    }
+  });
+
+  // Inner solid marker
+  map.addLayer({
+    id: 'deploy-pulse-inner', type: 'circle', source: 'deploy-point',
+    slot: 'top',
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 10, 9, 16, 12, 22],
+      'circle-color': '#00FF88',
+      'circle-opacity': 0.9,
+      'circle-stroke-width': 3,
+      'circle-stroke-color': '#ffffff',
+    }
+  });
+
+  // Label
+  map.addLayer({
+    id: 'deploy-label', type: 'symbol', source: 'deploy-point',
+    slot: 'top',
+    layout: {
+      'text-field': ['concat', 'DEPLOY HERE\n', ['get', 'city']],
+      'text-size': 13,
+      'text-anchor': 'top',
+      'text-offset': [0, 2.5],
+      'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+    },
+    paint: {
+      'text-color': '#00FF88',
+      'text-halo-color': '#000',
+      'text-halo-width': 1.5,
+    },
+  });
+
+  // Pulse animation — oscillate outer ring radius
+  let pulsePhase = 0;
+  const pulseInterval = setInterval(() => {
+    if (!map.getLayer('deploy-pulse-outer')) {
+      clearInterval(pulseInterval);
+      return;
+    }
+    pulsePhase += 0.05;
+    const scale = 1 + 0.3 * Math.sin(pulsePhase);
+    const opacity = 0.15 + 0.1 * Math.sin(pulsePhase);
+    const zoom = map.getZoom();
+    const baseRadius = zoom < 8 ? 40 : zoom < 10 ? 60 : 80;
+    map.setPaintProperty('deploy-pulse-outer', 'circle-radius', baseRadius * scale);
+    map.setPaintProperty('deploy-pulse-outer', 'circle-color', `rgba(0, 255, 136, ${opacity})`);
+  }, 50);
+}
+
+/**
+ * Dim facilities outside the highlighted region.
+ * Reduces opacity of markers/glow for facilities not in the target region,
+ * making the highlighted region visually pop.
+ */
+function applyRegionHighlight(region: string): void {
+  const regionLower = region.toLowerCase();
+  console.log('[OASIS] applyRegionHighlight:', regionLower);
+
+  // Substring match: check if region property contains the highlight string
+  // Handles both "Northern" and "Northern Region" style values
+  const inRegionExpr: any = [
+    'in', regionLower,
+    ['downcase', ['coalesce', ['get', 'region'], '']]
+  ];
+
+  // Bright markers in-region, dimmed markers outside
+  map.setPaintProperty('layer-markers', 'circle-opacity', [
+    'case', inRegionExpr, 1, 0.15
+  ]);
+  map.setPaintProperty('layer-markers', 'circle-stroke-opacity', [
+    'case', inRegionExpr, 0.9, 0.1
+  ]);
+  map.setPaintProperty('layer-glow', 'circle-opacity', [
+    'case', inRegionExpr, 0.2, 0.03
+  ]);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -430,7 +547,7 @@ function showDetail(props: any, lngLat: any): void {
   const coords: [number, number] = lngLat ? [lngLat.lng, lngLat.lat] : (props.coords || [0, 0]);
   currentFacilityCoords = coords;
   add3DHospitalModel(coords, props.name || 'Hospital');
-  narrateFacility(props);
+  if (ELEVENLABS_API_KEY) narrateFacility(props);
 }
 
 function closeDetail(): void {
@@ -476,7 +593,6 @@ function toggleLayer(name: string): void {
 // 3D HOSPITAL MODEL (three.js)
 // ═══════════════════════════════════════════════════════════════
 function add3DHospitalModel(coords: number[], name: string): void {
-  if (!THREE) return;
   if (current3DModel && map.getLayer(current3DModel)) map.removeLayer(current3DModel);
 
   const merc = mapboxgl.MercatorCoordinate.fromLngLat(coords, 0);
@@ -565,7 +681,6 @@ function add3DHospitalModel(coords: number[], name: string): void {
       this.camera.projectionMatrix = m.multiply(l);
       this.renderer.resetState();
       this.renderer.render(this.scene, this.camera);
-      this.map.triggerRepaint();
     }
   };
 
@@ -621,15 +736,27 @@ function applyHostContext(ctx: McpUiHostContext): void {
  * Called before the intro fly-to to override the default Ghana overview.
  */
 function resolveToolCameraTarget(): { center: [number, number]; zoom: number; pitch: number } | null {
-  if (!pendingToolData) return null;
+  if (!pendingToolData) {
+    console.log('[OASIS] resolveToolCameraTarget: no pendingToolData');
+    return null;
+  }
 
   const data = pendingToolData;
   const initialZoom = data.initial_zoom || 6.0;
+  console.log('[OASIS] resolveToolCameraTarget:', { highlight_region: data.highlight_region, initial_zoom: initialZoom, mode: data.mode });
+
+  // Priority 0: impact mode with recommended deployment — zoom to that point
+  if (data.narrative_focus === 'impact' && data.recommended_deployment) {
+    const dep = data.recommended_deployment;
+    console.log('[OASIS] impact mode — targeting deployment point:', dep);
+    return { center: [dep.lng, dep.lat], zoom: Math.max(initialZoom, 9), pitch: 55 };
+  }
 
   // Priority 1: explicit highlight_region
   if (data.highlight_region) {
     const regionKey = data.highlight_region.toLowerCase();
     const coords = REGION_COORDS[regionKey];
+    console.log('[OASIS] highlight_region lookup:', regionKey, '→', coords);
     if (coords) {
       return { center: coords, zoom: initialZoom, pitch: 45 };
     }
@@ -660,9 +787,18 @@ function applyToolData(): void {
   const data = pendingToolData;
   pendingToolData = null;
 
+  const hasHighlightRegion = !!data.highlight_region;
+  console.log('[OASIS] applyToolData:', { mode: data.mode, hasHighlightRegion, highlight_region: data.highlight_region, gaps: data.gaps?.length });
+
+  // -- Region highlighting: dim facilities outside the target region --
+  if (hasHighlightRegion) {
+    applyRegionHighlight(data.highlight_region);
+  }
+
   // -- Desert mode: render gap circles directly --
   if (data.mode === 'deserts' && data.gaps?.length > 0) {
-    renderDesertGaps(data.gaps);
+    // Skip fitBounds when highlight_region already controls the camera
+    renderDesertGaps(data.gaps, hasHighlightRegion);
     layerState.deserts = true;
     $('tog-deserts').classList.add('on');
 
@@ -675,6 +811,11 @@ function applyToolData(): void {
   // -- Narrative focus overlays --
   if (data.narrative_focus === 'deserts' && !layerState.heatmap) {
     toggleLayer('heatmap');
+  }
+
+  // -- Impact mode: add pulsing deployment marker at recommended point --
+  if (data.narrative_focus === 'impact' && data.recommended_deployment) {
+    renderDeploymentMarker(data.recommended_deployment);
   }
 }
 
@@ -703,6 +844,7 @@ app.ontoolresult = (result: any) => {
 
       // Store full tool data — applied after map + facilities load
       pendingToolData = data;
+      console.log('[OASIS] ontoolresult stored pendingToolData:', { mode: data.mode, highlight_region: data.highlight_region, narrative_focus: data.narrative_focus, initial_zoom: data.initial_zoom, gap_count: data.gap_count });
     }
   } catch (err) {
     console.error('Failed to parse geo_map tool result:', err);

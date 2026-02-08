@@ -1,132 +1,100 @@
 # OASIS — "Today is gonna be the day..."
 
+## Mission: Ship the Demo
+
+We are in **demo mode**. Everything we build must serve the 50-second Screen.studio recording. The demo has 4 beats — each must work flawlessly. If it doesn't appear in the demo, it doesn't matter right now.
+
+## The 4 Demo Beats
+
+| Beat | User Types | Tools Called | Status |
+|------|-----------|-------------|--------|
+| 1 — The Question | "Where are the surgical deserts in Northern Ghana?" | `geo_map(mode="deserts", condition="surgery", highlight_region="Northern", initial_zoom=7, narrative_focus="deserts")` | geo_map EXISTS |
+| 2 — The Investigation | "I see a facility near Tamale claims surgical capability. Can you verify that?" | `search_facility_capabilities(query="surgical capability Tamale", limit=5)` → `execute_query(sql_query="SELECT ... WHERE pk_unique_id='[id]'")` | search_facility_capabilities NEEDS WORK; execute_query EXISTS |
+| 3 — The Recommendation | "Where should we deploy one surgical team to save the most lives?" | `geo_map(mode="deserts", condition="surgery", narrative_focus="impact", highlight_region="Northern", initial_zoom=7)` | geo_map EXISTS |
+| 4 — The Closer | "Show me the evidence trail" | `get_citation_trace(limit=5)` | NEEDS WORK (Databricks/MLflow optional) |
+
+### What Must Work for the Demo
+
+**Beat 1 + 3 (geo_map):** Already functional. Needs to support `narrative_focus="deserts"` and `narrative_focus="impact"` parameters cleanly, return gap count, worst location, distance, and estimated population. Verify these params work and the map renders the right visualization for each mode.
+
+**Beat 2 (anomaly detection):** This is the IDP Innovation showpiece (30% of score). Two-step flow:
+1. `search_facility_capabilities` — semantic/text search over facility free-form fields. Currently declared in `src/oasis/databricks/rag.py` but needs to work without Databricks too (DuckDB full-text search fallback).
+2. `execute_query` — already works. Fetches structured data to cross-reference against the RAG result.
+3. Claude compares the two and spots the anomaly. The response names a specific facility, specific procedures it claims, and specific staff/equipment numbers that contradict the claim.
+
+**Beat 4 (citations):** `get_citation_trace` in `src/oasis/databricks/tracing.py`. If MLflow isn't available, this needs a local fallback that returns the tool call chain from the conversation. The response text is fixed — this beat is about the visual of a citation trace appearing.
+
+### Demo Preset Prompt
+
+The full preset prompt for Claude Desktop's project instructions is in `SCRIPT.md`. It makes Claude follow the exact script — tool calls, response text, everything deterministic. Before recording, do a dry run and update the preset prompt with real numbers from tool results.
+
+## Priority Order
+
+1. **Make Beat 2 work end-to-end** — `search_facility_capabilities` with DuckDB fallback + the anomaly detection flow
+2. **Make Beat 4 work** — `get_citation_trace` with local fallback
+3. **Verify Beat 1 + 3** — geo_map with the exact params from the script, ensure narrative_focus modes return the right data
+4. **Dry run** — Run all 4 beats, capture real numbers, update preset prompt
+5. **Polish map visuals** — Heatmap pulses, camera fly animations, warning badges, impact overlays
+
+Everything else (route_patient, extract_capabilities, detect_anomalies, analyze_facility as standalone tools) is deferred until after the recording is done.
+
 ## Project Identity
 
-**OASIS** (Orchestrated Agentic System for Intelligent healthcare Synthesis) is a hackathon project. Named after the band behind *Wonderwall*, because we're building the intelligence layer that connects healthcare resources to the communities that need them — "the one that saves you."
+**OASIS** (Orchestrated Agentic System for Intelligent healthcare Synthesis). Named after the band behind *Wonderwall* — "the one that saves you."
 
-**Tone & Vibe:** Bold, warm, human. Impressive tech + genuine heart + a touch of rockstar energy = winning demo. Lean into the Wonderwall reference — surprise the judges with creative touches.
+**Hackathon:** "Bridging Medical Deserts" for Virtue Foundation, sponsored by Databricks.
 
-## Challenge Context
-
-**Hackathon Challenge:** "Bridging Medical Deserts" — Building Intelligent Document Parsing Agents for the Virtue Foundation. Sponsored by Databricks.
-
-**Goal:** Build an IDP agent that extracts and verifies medical facility capabilities from messy, unstructured data — and reasons over it to understand where care truly exists and where it is missing. Reduce time for patients to receive lifesaving treatment by 100x.
-
-**Evaluation Criteria:**
-| Criterion | Weight | What Judges Look For | Our Strategy |
-|-----------|--------|---------------------|-------------|
-| Technical Accuracy | 35% | Reliably handle "Must Have" queries from VF Agent Questions; detect anomalies | OASIS tools for the Must Have query categories |
-| IDP Innovation | 30% | Extract + synthesize from unstructured free-form text | Smart tools that parse `procedure`/`equipment`/`capability` and cross-reference with structured data |
-| Social Impact | 25% | Identify medical deserts, aid resource allocation | Interactive Mapbox GL JS desert mapper |
-| User Experience | 10% | Intuitive for non-technical NGO planners, natural language | Claude Desktop natural language interface |
-
-**Core Features (MVP):**
-1. **Unstructured Feature Extraction** — Parse free-form `procedure`, `equipment`, `capability` columns
-2. **Intelligent Synthesis** — Combine unstructured insights with structured facility schemas
-3. **Planning System** — Accessible system for routing patients to care, adoptable across experience levels and age groups
-
-**Stretch Goals (from challenge):**
-1. **Citations** — Row-level citations showing what data supports each claim. Bonus: agentic-step-level citations (which data was used at each reasoning step). *Hint from organizers: use experiment tracking tools like MLflow to trace agent loops.*
-2. **Map Visualization** — Interactive map demonstrating conclusions visually
-3. **Real-impact Bonus** — Tackle questions from the VF Agent Questions doc (see below). The Databricks team is collaborating with VF to ship an agent by June 7th — our work could feed into that.
-
-**Suggested Tech Stack (from organizers):** RAG + Agentic workflows. They suggest langgraph/crewAI, MLflow, Databricks/FAISS for RAG, Genie for Text2SQL. We deviate intentionally: OASIS/MCP with Claude Desktop instead, DuckDB locally. But we should use Databricks (Vector Search or MLflow) to show we engaged with the sponsor's stack.
-
-**Out of Scope:** BigQuery, OAuth2, any cloud backends beyond Databricks
-
-## VF Agent Questions — The Actual Acceptance Criteria
-
-The VF Agent Questions doc (`Virtue Foundation Agent Questions - Hack Nation.md`) defines **59 questions across 11 categories** with MoSCoW priorities. The **"Must Have" questions are what judges will test for the 35% Technical Accuracy score.** Tackling "Should Have" and beyond earns the real-impact bonus.
-
-**Must Have queries we need to nail:**
-- **Basic lookups:** "How many hospitals have cardiology?", "Which region has the most [type] hospitals?" → Genie/Text2SQL equivalent
-- **Geospatial:** "How many hospitals treating [condition] within [X] km of [location]?", "Where are the largest cold spots for [procedure]?" → requires geospatial calculation
-- **Anomaly detection:** "Which facilities claim unrealistic number of procedures relative to size?", "Where do things that shouldn't move together appear?" (e.g., huge bed count + minimal surgical equipment) → our anomaly tools
-- **Resource gaps:** "Which procedures depend on very few facilities?", "Where is oversupply vs scarcity of high-complexity procedures?" → medical desert analysis
-- **Workforce:** "Where is the workforce for [subspecialty] actually practicing?" → structured data queries
-- **NGO gaps:** "Where are gaps where no organizations work despite evident need?" → desert mapping
-
-**How our tools map to VF's architecture:**
-| VF Concept | Our Implementation |
-|------------|-------------------|
-| Genie Chat (Text2SQL) | `execute_query` tool (DuckDB) |
-| Vector Search with Filtering | `extract_capabilities` tool + DuckDB full-text search (stretch: Databricks VS) |
-| Medical Reasoning Agent | Claude's native reasoning over tool results |
-| Geospatial Calculation | `find_medical_deserts` + `route_patient` tools |
-| External Data | Out of scope for hackathon |
-
-## Team & Workload
-
-| Owner | Track | Focus |
-|-------|-------|-------|
-| Rafi | RAG & Databricks | Databricks Vector Search integration, RAG pipeline |
-| Hannes | Orchestration | MCP code execution, multi-step reasoning, integration |
-| Jakob | Anomaly Detection | Anomaly detection tools for the Ghana dataset |
-| Fourth Member | Map Visualization | Mapbox GL JS interactive map (Medical Desert Mapper app) |
-
-**Integration contract:** Agree early on JSON shapes that tools return and the map consumes.
-
-## Key Technical Challenges
-
-**Multi-step dataframe reasoning in MCP:** Current MCP tools are text-in/text-out, insufficient for complex analysis. **Approach:** Design "smart tools" that run full pipelines internally (SQL → parse → cross-reference → structured result) rather than requiring model-orchestrated dataframe passes. Investigate MCP code execution as a complementary option.
-
-**Databricks integration:** Vector Search for RAG primarily satisfies eval criteria — 987 rows don't need it. If time is tight, prioritize **MLflow tracing for citations** (directly maps to stretch goal #1 and supports the 35% Technical Accuracy criterion) over RAG.
+**Scoring:**
+| Criterion | Weight | Demo Beat |
+|-----------|--------|-----------|
+| Technical Accuracy | 35% | All — real tools, real data, real results |
+| IDP Innovation | 30% | Beat 2 — free-form text extraction + structured cross-reference + anomaly |
+| Social Impact | 25% | Beat 3 — actionable deployment recommendation |
+| User Experience | 10% | All — entire demo is natural language conversation |
 
 ## Architecture
 
-Claude Desktop → OASIS MCP Server (VF tools) + Medical Desert Mapper App (interactive map)
-→ OASIS Core: DuckDB (VF data) + Skills (IDP, Anomaly) + Tools (Extract, Route, Analyze)
-→ Optional: Databricks Vector Search (RAG) + MLflow (Tracing/Citations)
+```
+Claude Desktop → OASIS MCP Server → DuckDB (VF Ghana data, ~1,002 facilities)
+                                  → Medical Desert Mapper (Mapbox GL JS 3D map)
+                                  → Optional: Databricks Vector Search + MLflow
+```
+
+## What's Working Now
+
+**11 MCP tools registered:**
+- Management: `list_datasets`, `set_dataset`
+- Tabular: `get_database_schema`, `get_table_info`, `execute_query`
+- Geospatial: `count_facilities`, `find_facilities_in_radius`, `find_coverage_gaps`, `calculate_distance`, `geocode_facilities`
+- App: `geo_map` (GeoMapTool + Vite UI bundle)
+
+**3 Databricks tools (optional, graceful degradation):**
+- `search_facility_capabilities` (RAG) — needs DuckDB fallback for demo
+- `ask_genie` (Text2SQL) — not in demo
+- `get_citation_trace` (MLflow) — needs local fallback for demo
 
 ## Dataset: Virtue Foundation Ghana
 
-~1,002 healthcare facilities in Ghana. Schema docs: `Virtue Foundation Scheme Documentation.md`. Pydantic models: `prompts_and_pydantic_models/`.
-
-**Key insight:** Free-form fields (`procedure`, `equipment`, `capability`) are JSON arrays of strings — richest data. Many fields are null/empty — detecting these gaps IS the feature. Specialties may be incomplete vs free-form text. Some facilities duplicated (same `pk_unique_id`, different `content_table_id`).
-
-## What to Build
-
-### Tools (following protocol in `src/oasis/core/tools/base.py`)
-1. **`analyze_facility`** — Deep analysis combining structured + free-form data
-2. **`find_medical_deserts`** — Geographic areas lacking specific specialties/capabilities (covers VF geospatial + resource gap queries)
-3. **`detect_anomalies`** — Flag inconsistent facility claims (covers VF anomaly detection Must Haves: unrealistic procedure counts, mismatched infrastructure signals)
-4. **`route_patient`** — Nearest capable facility for a medical need + location (the "planning system")
-5. **`extract_capabilities`** — IDP re-parsing of free-form text with enhanced extraction (covers VF validation queries)
-
-### Medical Desert Mapper App
-Mapbox GL JS map (chosen for 3D), facilities as colored markers, heatmap overlay, filter controls, facility detail sidebar, desert highlighting. Centerpiece of the demo. See `docs/OASIS_APPS.md` for protocol, `src/oasis/apps/__init__.py` for registration.
-
-### Skills (in `src/oasis/skills/`)
-Skills are markdown files with YAML frontmatter. The framework supports `clinical` and `system` categories. See `src/oasis/skills/SKILL_FORMAT.md` for the spec and `SKILLS_INDEX.md` for the index.
+~1,002 healthcare facilities. Free-form fields (`procedure`, `equipment`, `capability`) are JSON arrays of strings — richest data. Many fields null/empty — detecting gaps IS the feature. Schema: `docs/challenge/Virtue Foundation Scheme Documentation.md`.
 
 ## Development Conventions
 
 - Python 3.10+, type hints, Ruff (line length 88), pytest
 - **Tools return native Python types** — MCP layer serializes via `serialize_for_mcp()`
 - **Canonical schema names** — `schema.table` format (e.g., `vf.facilities`)
-- **Modality-based filtering** — tools declare `required_modalities: frozenset[Modality]`
-- **DuckDB only** — no cloud backends (except optional Databricks for RAG/tracing)
-- **Skills are markdown** — YAML frontmatter in `src/oasis/skills/<category>/<name>/SKILL.md`
+- **DuckDB only** — Databricks optional for demo
 - Branch: `main` (hackathon, move fast). Don't commit secrets or node_modules.
 
-## Demo Script (under 2 minutes — bonus for conciseness)
-
-1. **"I said maybe..."** — "Where are the surgical deserts in Northern Ghana?" → Map launches, red zones pulse
-2. **"You're gonna be the one that saves me"** — "Does this Tamale facility really do emergency surgery?" → Anomaly detection with citations
-3. **"After all, you're my wonderwall"** — "Route a patient in Bolgatanga to emergency appendectomy" → Planning system with route on map
-4. **Strategic recommendation** — "Where should we place one new surgeon to close the biggest gap?" → ROI-based resource allocation on map
-5. **Closing** — Full Ghana coverage overlay. Every dot a facility, every gap a patient waiting.
-
-## Quick Reference
+## Key Files
 
 | What | Where |
 |------|-------|
-| Challenge description | `docs/challenge/CHALLENGE.md` |
-| VF Agent Questions (acceptance criteria) | `docs/challenge/Virtue Foundation Agent Questions - Hack Nation.md` |
+| Demo script & preset prompt | `SCRIPT.md` |
+| MCP server | `src/oasis/mcp_server.py` |
+| Tool protocol | `src/oasis/core/tools/base.py` |
+| geo_map app | `src/oasis/apps/geo_map/` |
+| Databricks tools | `src/oasis/databricks/` |
 | VF Ghana data | `vf-ghana.csv` |
 | Schema docs | `docs/challenge/Virtue Foundation Scheme Documentation.md` |
-| Tool protocol | `src/oasis/core/tools/base.py` |
-| MCP server | `src/oasis/mcp_server.py` |
 | Apps guide | `docs/OASIS_APPS.md` |
-| Dev guide | `docs/DEVELOPMENT.md` |
-| Custom datasets | `docs/CUSTOM_DATASETS.md` |
+| VF Agent Questions | `docs/challenge/Virtue Foundation Agent Questions - Hack Nation.md` |
