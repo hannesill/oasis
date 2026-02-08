@@ -1,0 +1,49 @@
+{
+  "mcpServers": {
+    "physionet-mcp": {
+      "command": "uvx",
+      "args": [
+        "physionet-mcp"
+      ],
+      "env": {
+        "BIGQUERY_PROJECT_ID": "cmi-lab"
+      }
+    },
+    "m3": {
+      "command": "uvx",
+      "args": [
+        "m3-mcp"
+      ],
+      "env": {
+        "M3_BACKEND": "bigquery",
+        "M3_PROJECT_ID": "cmi-lab"
+      }
+    },
+    "tulip": {
+      "command": "/opt/homebrew/bin/python3",
+      "args": [
+        "-m",
+        "tulip.mcp_server"
+      ],
+      "env": {
+        "TULIP_BQ_PROJECT": "cmi-lab",
+        "TULIP_BQ_DATASET_PROJECT": "amsterdamumcdb",
+        "TULIP_BQ_DATASET": "van_gogh_2026_datathon",
+        "TULIP_BQ_LOCATION": "eu"
+      }
+    },
+    "m4": {
+      "command": "/Users/rajnu/miniforge3/bin/python",
+      "args": [
+        "-m",
+        "m4.mcp_server"
+      ],
+      "cwd": "/Users/rajnu/Desktop/Hackathon/Hacknation/oasis",
+      "env": {
+        "M4_DATA_DIR": "/Users/rajnu/Desktop/Hackathon/Hacknation/oasis/m4_data",
+        "PYTHONPATH": "/Users/rajnu/Desktop/Hackathon/Hacknation/oasis/src"
+      }
+    }
+  }
+}
+

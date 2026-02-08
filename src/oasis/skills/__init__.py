@@ -1,0 +1,25 @@
+"""OASIS skills package for AI coding tools."""
+
+from oasis.skills.installer import (
+    AI_TOOLS,
+    AITool,
+    SkillInfo,
+    get_all_installed_skills,
+    get_available_skills,
+    get_available_tools,
+    get_installed_skills,
+    get_skills_source,
+    install_skills,
+)
+
+__all__ = [
+    "AI_TOOLS",
+    "AITool",
+    "SkillInfo",
+    "get_all_installed_skills",
+    "get_available_skills",
+    "get_available_tools",
+    "get_installed_skills",
+    "get_skills_source",
+    "install_skills",
+]

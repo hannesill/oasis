@@ -1,4 +1,4 @@
-"""Tests for m4.core.datasets module.
+"""Tests for oasis.core.datasets module.
 
 Tests cover:
 - Modality enum
@@ -11,7 +11,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from m4.core.datasets import (
+from oasis.core.datasets import (
     DatasetDefinition,
     DatasetRegistry,
     Modality,
@@ -24,7 +24,6 @@ class TestEnums:
     def test_modality_enum_values(self):
         """Test that all expected modalities are defined."""
         assert Modality.TABULAR
-        assert Modality.NOTES
 
 
 class TestDatasetDefinition:
@@ -34,11 +33,10 @@ class TestDatasetDefinition:
         """Test creating dataset with explicit modalities."""
         ds = DatasetDefinition(
             name="test-dataset",
-            modalities=frozenset({Modality.TABULAR, Modality.NOTES}),
+            modalities=frozenset({Modality.TABULAR}),
         )
 
         assert Modality.TABULAR in ds.modalities
-        assert Modality.NOTES in ds.modalities
 
     def test_default_duckdb_filename_generation(self):
         """Test that default DuckDB filename is auto-generated."""
@@ -65,7 +63,6 @@ class TestDatasetDefinition:
         """Test that schema_mapping defaults to empty dict."""
         ds = DatasetDefinition(name="test-dataset")
         assert ds.schema_mapping == {}
-        assert ds.bigquery_schema_mapping == {}
 
 
 class TestDatasetRegistry:
@@ -75,27 +72,16 @@ class TestDatasetRegistry:
         """Test that built-in datasets are registered."""
         DatasetRegistry.reset()
 
-        mimic_demo = DatasetRegistry.get("mimic-iv-demo")
-        assert mimic_demo is not None
-        assert mimic_demo.name == "mimic-iv-demo"
+        vf_ghana = DatasetRegistry.get("vf-ghana")
+        assert vf_ghana is not None
+        assert vf_ghana.name == "vf-ghana"
 
-        mimic_iv = DatasetRegistry.get("mimic-iv")
-        assert mimic_iv is not None
-        assert mimic_iv.name == "mimic-iv"
-
-    def test_mimic_demo_modalities(self):
-        """Test that MIMIC demo has expected modalities."""
+    def test_vf_ghana_modalities(self):
+        """Test that VF Ghana has expected modalities."""
         DatasetRegistry.reset()
-        mimic_demo = DatasetRegistry.get("mimic-iv-demo")
+        vf_ghana = DatasetRegistry.get("vf-ghana")
 
-        assert Modality.TABULAR in mimic_demo.modalities
-
-    def test_mimic_full_modalities(self):
-        """Test that MIMIC full has expected modalities."""
-        DatasetRegistry.reset()
-        mimic_iv = DatasetRegistry.get("mimic-iv")
-
-        assert Modality.TABULAR in mimic_iv.modalities
+        assert Modality.TABULAR in vf_ghana.modalities
 
     def test_register_custom_dataset(self):
         """Test registering a custom dataset."""
@@ -115,62 +101,25 @@ class TestDatasetRegistry:
         DatasetRegistry.reset()
 
         # All should work
-        assert DatasetRegistry.get("mimic-iv-demo") is not None
-        assert DatasetRegistry.get("MIMIC-IV-DEMO") is not None
-        assert DatasetRegistry.get("Mimic-Iv-Demo") is not None
+        assert DatasetRegistry.get("vf-ghana") is not None
+        assert DatasetRegistry.get("VF-GHANA") is not None
+        assert DatasetRegistry.get("Vf-Ghana") is not None
 
     def test_list_all_datasets(self):
         """Test listing all datasets."""
         DatasetRegistry.reset()
         all_datasets = DatasetRegistry.list_all()
 
-        assert len(all_datasets) >= 4
+        assert len(all_datasets) >= 1
         names = [ds.name for ds in all_datasets]
-        assert "mimic-iv-demo" in names
-        assert "mimic-iv" in names
-        assert "mimic-iv-note" in names
-        assert "eicu" in names
+        assert "vf-ghana" in names
 
-    def test_mimic_demo_schema_mapping(self):
-        """Test MIMIC-IV demo has correct schema mappings."""
+    def test_vf_ghana_schema_mapping(self):
+        """Test VF Ghana has correct schema mappings."""
         DatasetRegistry.reset()
-        ds = DatasetRegistry.get("mimic-iv-demo")
-        assert ds.schema_mapping == {"hosp": "mimiciv_hosp", "icu": "mimiciv_icu"}
-        assert ds.bigquery_schema_mapping == {}
-        assert ds.primary_verification_table == "mimiciv_hosp.admissions"
-
-    def test_mimic_iv_schema_mapping(self):
-        """Test MIMIC-IV has correct schema and BigQuery mappings."""
-        DatasetRegistry.reset()
-        ds = DatasetRegistry.get("mimic-iv")
-        assert ds.schema_mapping == {
-            "hosp": "mimiciv_hosp",
-            "icu": "mimiciv_icu",
-            "derived": "mimiciv_derived",
-        }
-        assert ds.bigquery_schema_mapping == {
-            "mimiciv_hosp": "mimiciv_3_1_hosp",
-            "mimiciv_icu": "mimiciv_3_1_icu",
-            "mimiciv_derived": "mimiciv_derived",
-        }
-        assert ds.primary_verification_table == "mimiciv_hosp.admissions"
-        assert "mimiciv_derived" in ds.bigquery_dataset_ids
-
-    def test_mimic_iv_note_schema_mapping(self):
-        """Test MIMIC-IV Note has correct schema mappings."""
-        DatasetRegistry.reset()
-        ds = DatasetRegistry.get("mimic-iv-note")
-        assert ds.schema_mapping == {"note": "mimiciv_note"}
-        assert ds.bigquery_schema_mapping == {"mimiciv_note": "mimiciv_note"}
-        assert ds.primary_verification_table == "mimiciv_note.discharge"
-
-    def test_eicu_schema_mapping(self):
-        """Test eICU has correct schema mappings with empty-string key."""
-        DatasetRegistry.reset()
-        ds = DatasetRegistry.get("eicu")
-        assert ds.schema_mapping == {"": "eicu_crd"}
-        assert ds.bigquery_schema_mapping == {"eicu_crd": "eicu_crd"}
-        assert ds.primary_verification_table == "eicu_crd.patient"
+        ds = DatasetRegistry.get("vf-ghana")
+        assert ds.schema_mapping == {"": "vf"}
+        assert ds.primary_verification_table == "vf.facilities"
 
 
 class TestDatasetRegistryEdgeCases:
@@ -182,19 +131,19 @@ class TestDatasetRegistryEdgeCases:
         This is important because custom datasets could shadow built-in ones.
         """
         DatasetRegistry.reset()
-        original = DatasetRegistry.get("mimic-iv-demo")
+        original = DatasetRegistry.get("vf-ghana")
         assert original is not None
 
         replacement = DatasetDefinition(
-            name="mimic-iv-demo",
+            name="vf-ghana",
             description="Overwritten",
-            modalities=frozenset({Modality.NOTES}),
+            modalities=frozenset({Modality.TABULAR}),
         )
         DatasetRegistry.register(replacement)
 
-        retrieved = DatasetRegistry.get("mimic-iv-demo")
+        retrieved = DatasetRegistry.get("vf-ghana")
         assert retrieved.description == "Overwritten"
-        assert Modality.NOTES in retrieved.modalities
+        assert Modality.TABULAR in retrieved.modalities
 
         # Clean up
         DatasetRegistry.reset()
@@ -208,8 +157,7 @@ class TestDatasetRegistryEdgeCases:
 
         DatasetRegistry.reset()
         assert DatasetRegistry.get("ephemeral-custom") is None
-        assert DatasetRegistry.get("mimic-iv-demo") is not None
-        assert DatasetRegistry.get("eicu") is not None
+        assert DatasetRegistry.get("vf-ghana") is not None
 
     def test_get_nonexistent_returns_none(self):
         """get() returns None for unknown dataset names."""
@@ -220,8 +168,8 @@ class TestDatasetRegistryEdgeCases:
         """get_active() raises DatasetError when no dataset is configured."""
         import pytest
 
-        import m4.config as cfg
-        from m4.core.exceptions import DatasetError
+        import oasis.config as cfg
+        from oasis.core.exceptions import DatasetError
 
         monkeypatch.setattr(cfg, "get_active_dataset", lambda: None)
 
@@ -232,8 +180,8 @@ class TestDatasetRegistryEdgeCases:
         """get_active() raises DatasetError when config points to unknown dataset."""
         import pytest
 
-        import m4.config as cfg
-        from m4.core.exceptions import DatasetError
+        import oasis.config as cfg
+        from oasis.core.exceptions import DatasetError
 
         monkeypatch.setattr(cfg, "get_active_dataset", lambda: "no-such-dataset")
 
@@ -242,7 +190,7 @@ class TestDatasetRegistryEdgeCases:
 
     def test_custom_json_oversized_file_skipped(self, tmp_path):
         """JSON files exceeding MAX_DATASET_FILE_SIZE are skipped."""
-        from m4.core.datasets import MAX_DATASET_FILE_SIZE
+        from oasis.core.datasets import MAX_DATASET_FILE_SIZE
 
         big_file = tmp_path / "huge.json"
         big_file.write_text("x" * (MAX_DATASET_FILE_SIZE + 1))
@@ -256,8 +204,7 @@ class TestDatasetRegistryEdgeCases:
         """Custom JSON with schema_mapping fields loads correctly."""
         json_data = {
             "name": "custom-mapped",
-            "schema_mapping": {"hosp": "custom_hosp"},
-            "bigquery_schema_mapping": {"custom_hosp": "custom_bq_hosp"},
+            "schema_mapping": {"": "custom_schema"},
         }
         (tmp_path / "mapped.json").write_text(json.dumps(json_data))
 
@@ -266,8 +213,7 @@ class TestDatasetRegistryEdgeCases:
 
         ds = DatasetRegistry.get("custom-mapped")
         assert ds is not None
-        assert ds.schema_mapping == {"hosp": "custom_hosp"}
-        assert ds.bigquery_schema_mapping == {"custom_hosp": "custom_bq_hosp"}
+        assert ds.schema_mapping == {"": "custom_schema"}
 
         DatasetRegistry.reset()
 
@@ -276,7 +222,7 @@ class TestDatasetRegistryEdgeCases:
         DatasetRegistry.reset()
         DatasetRegistry.load_custom_datasets(tmp_path / "nonexistent")
         # Should not raise, just return silently
-        assert DatasetRegistry.get("mimic-iv-demo") is not None
+        assert DatasetRegistry.get("vf-ghana") is not None
 
     def test_load_custom_datasets_malformed_json(self, tmp_path):
         """Malformed JSON files are skipped gracefully."""
@@ -285,7 +231,7 @@ class TestDatasetRegistryEdgeCases:
         DatasetRegistry.reset()
         DatasetRegistry.load_custom_datasets(tmp_path)
         # Should not crash; malformed file is simply skipped
-        assert DatasetRegistry.get("mimic-iv-demo") is not None
+        assert DatasetRegistry.get("vf-ghana") is not None
 
 
 class TestJSONLoading:
@@ -297,7 +243,7 @@ class TestJSONLoading:
             json_data = {
                 "name": "test-json-dataset",
                 "description": "Test dataset from JSON",
-                "modalities": ["TABULAR", "NOTES"],
+                "modalities": ["TABULAR"],
             }
             json_path = Path(tmpdir) / "test.json"
             json_path.write_text(json.dumps(json_data))
@@ -308,7 +254,6 @@ class TestJSONLoading:
             ds = DatasetRegistry.get("test-json-dataset")
             assert ds is not None
             assert Modality.TABULAR in ds.modalities
-            assert Modality.NOTES in ds.modalities
 
     def test_json_loading_defaults_when_not_specified(self):
         """Test that default modalities are applied when not in JSON."""
@@ -345,21 +290,20 @@ class TestJSONLoading:
             ds = DatasetRegistry.get("test-invalid-modality")
             assert ds is None
 
-    def test_json_loading_all_modalities(self):
-        """Test loading dataset with all available modalities."""
+    def test_json_loading_tabular_modality(self):
+        """Test loading dataset with TABULAR modality."""
         with tempfile.TemporaryDirectory() as tmpdir:
             json_data = {
-                "name": "test-full-modalities",
-                "modalities": ["TABULAR", "NOTES"],
+                "name": "test-tabular-dataset",
+                "modalities": ["TABULAR"],
             }
-            json_path = Path(tmpdir) / "full.json"
+            json_path = Path(tmpdir) / "tabular.json"
             json_path.write_text(json.dumps(json_data))
 
             DatasetRegistry.reset()
             DatasetRegistry.load_custom_datasets(Path(tmpdir))
 
-            ds = DatasetRegistry.get("test-full-modalities")
+            ds = DatasetRegistry.get("test-tabular-dataset")
             assert ds is not None
-            assert len(ds.modalities) == 2
+            assert len(ds.modalities) == 1
             assert Modality.TABULAR in ds.modalities
-            assert Modality.NOTES in ds.modalities

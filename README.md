@@ -31,4 +31,23 @@ Virtue Foundation Ghana v0.3 — healthcare facility records with structured fie
 
 - Python + DuckDB for data
 - MCP server for Claude Desktop integration
-- Leaflet.js for interactive map visualization
+- Mapbox GL JS for interactive map visualization
+
+## Quickstart
+
+```bash
+# 1. Install dependencies
+uv sync
+source .venv/bin/activate
+
+# 2. Initialize the VF Ghana dataset
+oasis init vf-ghana
+
+# 3. Verify everything is working
+oasis status
+
+# 4. Configure Claude Desktop integration
+oasis config claude
+```
+
+After running `oasis config claude`, restart Claude Desktop. You'll have access to OASIS tools for querying Ghana healthcare facility data through natural language.

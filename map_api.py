@@ -19,14 +19,15 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent / "src"))
-os.environ.setdefault("M4_DATA_DIR", str(Path(__file__).parent / "m4_data"))
+os.environ.setdefault("OASIS_DATA_DIR", str(Path(__file__).parent / "oasis_data"))
+os.environ.setdefault("OASIS_DATASET", "vf-ghana")
 
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 import uvicorn
 
-from m4.core.tools.geospatial import (
+from oasis.core.tools.geospatial import (
     FindFacilitiesInRadiusTool,
     FindFacilitiesInRadiusInput,
     FindCoverageGapsTool,
@@ -36,8 +37,8 @@ from m4.core.tools.geospatial import (
     GeocodeFacilitiesTool,
     GeocodeFacilitiesInput,
 )
-from m4.core.datasets import DatasetRegistry
-from m4.config import get_active_dataset
+from oasis.core.datasets import DatasetRegistry
+from oasis.config import get_active_dataset
 
 # ── Instantiate tools (same instances MCP server uses) ──
 _find = FindFacilitiesInRadiusTool()

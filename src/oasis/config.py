@@ -1,0 +1,279 @@
+import json
+import logging
+import os
+from pathlib import Path
+from typing import Any
+
+from oasis.core.datasets import DatasetRegistry
+from oasis.core.exceptions import DatasetError
+
+APP_NAME = "oasis"
+
+# Setup basic logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(APP_NAME)
+
+
+# -------------------------------------------------------------------
+# Data directory rooted at project root (two levels up from this file)
+# -------------------------------------------------------------------
+def _find_project_root_from_cwd() -> Path:
+    """
+    Search upwards from CWD for a valid 'oasis_data' directory.
+    If found (and looks like an oasis data dir), return its parent.
+    Otherwise return CWD.
+    """
+    cwd = Path.cwd()
+    for path in [cwd, *cwd.parents]:
+        data_dir = path / "oasis_data"
+        if data_dir.exists() and data_dir.is_dir():
+            # Check for characteristic oasis data artifacts to avoid false positives
+            if (
+                (data_dir / "config.json").exists()
+                or (data_dir / "databases").exists()
+                or (data_dir / "parquet").exists()
+                or (data_dir / "datasets").exists()
+                or (data_dir / "raw_files").exists()
+            ):
+                return path
+    return cwd
+
+
+def _get_project_root() -> Path:
+    """
+    Determine project root:
+    - Priority 1: OASIS_DATA_DIR environment variable (use parent of specified data dir)
+    - Priority 2: If cloned repo: use repository root (two levels up from this file)
+    - Priority 3: If pip installed: Search upwards from CWD for existing 'oasis_data' directory, or use CWD.
+    """
+    # Check for explicit data directory override
+    env_data_dir = os.getenv("OASIS_DATA_DIR")
+    if env_data_dir:
+        data_path = Path(env_data_dir).resolve()
+        if data_path.exists():
+            return data_path.parent
+        # If specified but doesn't exist, use its parent anyway (will be created)
+        return data_path.parent
+
+    package_root = Path(__file__).resolve().parents[2]
+
+    # Check if we're in a cloned repository (has pyproject.toml at root)
+    if (package_root / "pyproject.toml").exists():
+        return package_root
+
+    # Pip installed: Search for project root
+    return _find_project_root_from_cwd()
+
+
+_PROJECT_ROOT = _get_project_root()
+_PROJECT_DATA_DIR = _PROJECT_ROOT / "oasis_data"
+
+_DEFAULT_DATABASES_DIR = _PROJECT_DATA_DIR / "databases"
+_DEFAULT_PARQUET_DIR = _PROJECT_DATA_DIR / "parquet"
+_RUNTIME_CONFIG_PATH = _PROJECT_DATA_DIR / "config.json"
+_CUSTOM_DATASETS_DIR = _PROJECT_DATA_DIR / "datasets"
+
+
+# --------------------------------------------------
+# Helper functions
+# --------------------------------------------------
+
+
+def _ensure_custom_datasets_loaded():
+    """Ensure custom datasets are loaded from the custom datasets directory."""
+    DatasetRegistry.load_custom_datasets(_CUSTOM_DATASETS_DIR)
+
+
+def get_default_database_path(dataset_name: str) -> Path | None:
+    """
+    Return the default local DuckDB path for a given dataset,
+    under <project_root>/oasis_data/databases/.
+    """
+    _ensure_custom_datasets_loaded()
+    ds = DatasetRegistry.get(dataset_name.lower())
+    if not ds:
+        logger.warning(
+            f"Unknown dataset, cannot determine default DB path: {dataset_name}"
+        )
+        return None
+
+    _DEFAULT_DATABASES_DIR.mkdir(parents=True, exist_ok=True)
+    if not ds.default_duckdb_filename:
+        logger.warning(f"Missing default DuckDB filename for dataset: {dataset_name}")
+        return None
+    return _DEFAULT_DATABASES_DIR / ds.default_duckdb_filename
+
+
+def get_dataset_parquet_root(dataset_name: str) -> Path | None:
+    """
+    Return the Parquet root for a dataset under
+    <project_root>/oasis_data/parquet/<dataset_name>/.
+    """
+    _ensure_custom_datasets_loaded()
+    ds = DatasetRegistry.get(dataset_name.lower())
+    if not ds:
+        logger.warning(
+            f"Unknown dataset, cannot determine Parquet root: {dataset_name}"
+        )
+        return None
+    path = _DEFAULT_PARQUET_DIR / dataset_name.lower()
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+# -----------------------------
+# Runtime config (active dataset)
+# -----------------------------
+def _ensure_data_dirs():
+    _DEFAULT_DATABASES_DIR.mkdir(parents=True, exist_ok=True)
+    _DEFAULT_PARQUET_DIR.mkdir(parents=True, exist_ok=True)
+    _PROJECT_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    _CUSTOM_DATASETS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _get_default_runtime_config() -> dict:
+    # We initialize with empty overrides.
+    # Paths are derived dynamically from registry unless overridden here.
+    return {
+        "active_dataset": None,
+        "duckdb_paths": {},  # Map dataset_name -> path
+        "parquet_roots": {},  # Map dataset_name -> path
+    }
+
+
+def load_runtime_config() -> dict:
+    """Load runtime configuration from <project_root>/oasis_data/config.json or use default"""
+    _ensure_data_dirs()
+    if _RUNTIME_CONFIG_PATH.exists():
+        try:
+            return json.loads(_RUNTIME_CONFIG_PATH.read_text())
+        except Exception:
+            logger.warning("Could not parse runtime config; using defaults")
+    # defaults
+    return _get_default_runtime_config()
+
+
+def save_runtime_config(cfg: dict) -> None:
+    _ensure_data_dirs()
+    _RUNTIME_CONFIG_PATH.write_text(json.dumps(cfg, indent=2))
+
+
+def _has_parquet_files(path: Path | None) -> bool:
+    return bool(path and path.exists() and any(path.rglob("*.parquet")))
+
+
+def detect_available_local_datasets() -> dict[str, dict[str, Any]]:
+    """Return presence flags for all registered datasets."""
+    _ensure_custom_datasets_loaded()
+    cfg = load_runtime_config()
+
+    results = {}
+
+    # Check all registered datasets
+    for ds in DatasetRegistry.list_all():
+        name = ds.name
+
+        # Determine paths (check config overrides first)
+        parquet_root_str = cfg.get("parquet_roots", {}).get(name)
+        parquet_root = (
+            Path(parquet_root_str)
+            if parquet_root_str
+            else get_dataset_parquet_root(name)
+        )
+
+        db_path_str = cfg.get("duckdb_paths", {}).get(name)
+        db_path = Path(db_path_str) if db_path_str else get_default_database_path(name)
+
+        results[name] = {
+            "parquet_present": _has_parquet_files(parquet_root),
+            "db_present": bool(db_path and db_path.exists()),
+            "parquet_root": str(parquet_root) if parquet_root else "",
+            "db_path": str(db_path) if db_path else "",
+        }
+
+    return results
+
+
+def get_active_dataset() -> str:
+    """Get the active dataset name.
+
+    Raises:
+        DatasetError: If no dataset is configured and none can be auto-detected.
+    """
+    # Ensure custom datasets are loaded so they can be found in the registry
+    _ensure_custom_datasets_loaded()
+
+    # Priority 1: Environment variable
+    env_dataset = os.getenv("OASIS_DATASET")
+    if env_dataset:
+        return env_dataset
+
+    # Priority 2: Config file
+    cfg = load_runtime_config()
+    active = cfg.get("active_dataset")
+
+    # Else, raise an error that no active dataset is configured.
+    if not active:
+        raise DatasetError(
+            "No active dataset configured. Please rerun 'oasis init' to configure a dataset."
+        )
+
+    return active
+
+
+def set_active_dataset(choice: str) -> None:
+    """Set the active dataset.
+
+    Args:
+        choice: Dataset name to set as active
+
+    Raises:
+        ValueError: If the dataset is not registered
+    """
+    _ensure_custom_datasets_loaded()
+    valid_names = {ds.name for ds in DatasetRegistry.list_all()}
+
+    if choice not in valid_names:
+        raise ValueError(f"active_dataset must be a registered dataset. Got: {choice}")
+
+    cfg = load_runtime_config()
+    cfg["active_dataset"] = choice
+    save_runtime_config(cfg)
+
+
+VALID_BACKENDS = {"duckdb"}
+
+
+def get_active_backend() -> str:
+    """Get the active backend.
+
+    Returns:
+        Backend name (always 'duckdb')
+    """
+    return "duckdb"
+
+
+def set_active_backend(choice: str) -> None:
+    """Set the active backend.
+
+    Args:
+        choice: Backend name ('duckdb')
+
+    Raises:
+        ValueError: If the backend is not valid
+    """
+    choice = choice.lower()
+    if choice not in VALID_BACKENDS:
+        raise ValueError(f"backend must be one of {VALID_BACKENDS}. Got: {choice}")
+
+
+def get_duckdb_path_for(choice: str) -> Path | None:
+    return get_default_database_path(choice)
+
+
+def get_parquet_root_for(choice: str) -> Path | None:
+    return get_dataset_parquet_root(choice)

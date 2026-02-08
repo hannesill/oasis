@@ -57,18 +57,9 @@ junit.xml
 *.tmp
 *.swp
 
-# Local database files
-*.db
-*.db-journal*
-mimic*.db
-*.duckdb
-*.duckdb.wal
-*.duckdb.tmp
-mimic*.duckdb
-
-# Configuration files
-config.json
-*config*.json
+# OASIS generated data (recreated via `oasis init`)
+oasis_data/
+m4_data/
 
 # Operating System specific files
 .DS_Store
@@ -87,3 +78,5 @@ notes/
 
 # Node.js
 node_modules/
+
+.mystuff/

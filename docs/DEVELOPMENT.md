@@ -17,26 +17,26 @@ uv sync
 
 ```bash
 # Initialize a dataset from CSV
-uv run m4 init vf-ghana --src /path/to/csv
+uv run oasis init vf-ghana --src /path/to/csv
 
 # Switch active dataset
-uv run m4 use vf-ghana
+uv run oasis use vf-ghana
 
 # Show active dataset status (detailed view)
-uv run m4 status
+uv run oasis status
 
 # List all datasets (compact table)
-uv run m4 status --all
+uv run oasis status --all
 ```
 
 ### MCP Client Configuration
 
 ```bash
 # Auto-configure Claude Desktop
-uv run m4 config claude
+uv run oasis config claude
 
 # Generate config for other clients
-uv run m4 config --quick
+uv run oasis config --quick
 ```
 
 ### Development Commands
@@ -68,9 +68,9 @@ Point your MCP client to your local development environment:
 ```json
 {
   "mcpServers": {
-    "m4": {
+    "oasis": {
       "command": "/absolute/path/to/oasis/.venv/bin/python",
-      "args": ["-m", "m4.mcp_server"],
+      "args": ["-m", "oasis.mcp_server"],
       "cwd": "/absolute/path/to/oasis"
     }
   }
@@ -79,7 +79,7 @@ Point your MCP client to your local development environment:
 
 ## Architecture Overview
 
-M4 has three main layers:
+OASIS has three main layers:
 
 ```
 MCP Layer (mcp_server.py)
@@ -87,7 +87,7 @@ MCP Layer (mcp_server.py)
     ├── Exposes tools via Model Context Protocol
     └── Thin adapter over core functionality
 
-Core Layer (src/m4/core/)
+Core Layer (src/oasis/core/)
     │
     ├── datasets.py    - Dataset definitions and modalities
     ├── tools/         - Tool implementations (tabular, management)
@@ -113,14 +113,14 @@ The `ToolSelector` automatically filters tools based on the active dataset's mod
 
 ## Adding a New Tool
 
-M4 uses a **protocol-based design** (structural typing). Tools don't inherit from a base class — they implement the required interface.
+OASIS uses a **protocol-based design** (structural typing). Tools don't inherit from a base class — they implement the required interface.
 
-1. Create the tool class in `src/m4/core/tools/`:
+1. Create the tool class in `src/oasis/core/tools/`:
 
 ```python
 from dataclasses import dataclass
-from m4.core.datasets import DatasetDefinition, Modality
-from m4.core.tools.base import ToolInput, ToolOutput
+from oasis.core.datasets import DatasetDefinition, Modality
+from oasis.core.tools.base import ToolInput, ToolOutput
 
 @dataclass
 class MyNewToolInput(ToolInput):
@@ -153,7 +153,7 @@ class MyNewTool:
         return True
 ```
 
-2. Register it in `src/m4/core/tools/__init__.py`:
+2. Register it in `src/oasis/core/tools/__init__.py`:
 
 ```python
 from .my_module import MyNewTool
@@ -183,7 +183,7 @@ def my_new_tool(param1: str, limit: int = 10) -> str:
 
 ## Testing
 
-Tests mirror the `src/m4/` structure:
+Tests mirror the `src/oasis/` structure:
 
 ```
 tests/

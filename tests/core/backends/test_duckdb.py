@@ -1,4 +1,4 @@
-"""Tests for m4.core.backends.duckdb module.
+"""Tests for oasis.core.backends.duckdb module.
 
 Tests cover:
 - DuckDBBackend initialization
@@ -15,9 +15,9 @@ from unittest.mock import patch
 
 import pytest
 
-from m4.core.backends.base import ConnectionError, TableNotFoundError
-from m4.core.backends.duckdb import DuckDBBackend
-from m4.core.datasets import DatasetDefinition, Modality
+from oasis.core.backends.base import ConnectionError, TableNotFoundError
+from oasis.core.backends.duckdb import DuckDBBackend
+from oasis.core.datasets import DatasetDefinition, Modality
 
 
 @pytest.fixture
@@ -42,19 +42,19 @@ def temp_db(test_dataset):
         conn = duckdb.connect(str(db_path))
         conn.execute(
             """
-            CREATE TABLE patients (
-                subject_id INTEGER PRIMARY KEY,
-                gender VARCHAR,
-                anchor_age INTEGER
+            CREATE TABLE facilities (
+                pk_unique_id INTEGER PRIMARY KEY,
+                name VARCHAR,
+                number_beds INTEGER
             )
         """
         )
         conn.execute(
             """
-            INSERT INTO patients VALUES
-            (1, 'M', 65),
-            (2, 'F', 42),
-            (3, 'M', 55)
+            INSERT INTO facilities VALUES
+            (1, 'Tamale Teaching Hospital', 200),
+            (2, 'Korle Bu Teaching Hospital', 1600),
+            (3, 'Ridge Hospital', 420)
         """
         )
         conn.close()
@@ -90,8 +90,8 @@ class TestDuckDBPathResolution:
         assert path == temp_db
 
     def test_env_var_takes_second_priority(self, test_dataset, temp_db):
-        """Test that M4_DB_PATH env var takes second priority."""
-        with patch.dict(os.environ, {"M4_DB_PATH": str(temp_db)}):
+        """Test that OASIS_DB_PATH env var takes second priority."""
+        with patch.dict(os.environ, {"OASIS_DB_PATH": str(temp_db)}):
             backend = DuckDBBackend()  # No override
             path = backend._get_db_path(test_dataset)
 
@@ -100,13 +100,13 @@ class TestDuckDBPathResolution:
     def test_dataset_config_used_as_fallback(self, test_dataset):
         """Test that dataset config is used when no override."""
         with patch.dict(os.environ, {}, clear=True):
-            # Remove M4_DB_PATH if set
-            env_backup = os.environ.pop("M4_DB_PATH", None)
+            # Remove OASIS_DB_PATH if set
+            env_backup = os.environ.pop("OASIS_DB_PATH", None)
             try:
                 backend = DuckDBBackend()
 
                 with patch(
-                    "m4.core.backends.duckdb.get_default_database_path"
+                    "oasis.core.backends.duckdb.get_default_database_path"
                 ) as mock_get_path:
                     mock_get_path.return_value = Path("/mock/path/test.duckdb")
                     path = backend._get_db_path(test_dataset)
@@ -115,7 +115,7 @@ class TestDuckDBPathResolution:
                     mock_get_path.assert_called_once_with(test_dataset.name)
             finally:
                 if env_backup:
-                    os.environ["M4_DB_PATH"] = env_backup
+                    os.environ["OASIS_DB_PATH"] = env_backup
 
 
 class TestDuckDBQueryExecution:
@@ -125,20 +125,20 @@ class TestDuckDBQueryExecution:
         """Test executing a successful query."""
         backend = DuckDBBackend(db_path_override=temp_db)
 
-        result = backend.execute_query("SELECT * FROM patients", test_dataset)
+        result = backend.execute_query("SELECT * FROM facilities", test_dataset)
 
         assert result.success is True
         assert result.error is None
         assert result.row_count == 3
         assert result.dataframe is not None
-        assert "subject_id" in result.dataframe.columns
-        assert "gender" in result.dataframe.columns
+        assert "pk_unique_id" in result.dataframe.columns
+        assert "name" in result.dataframe.columns
 
     def test_query_with_limit(self, test_dataset, temp_db):
         """Test query with LIMIT clause."""
         backend = DuckDBBackend(db_path_override=temp_db)
 
-        result = backend.execute_query("SELECT * FROM patients LIMIT 1", test_dataset)
+        result = backend.execute_query("SELECT * FROM facilities LIMIT 1", test_dataset)
 
         assert result.success is True
         assert result.row_count == 1
@@ -148,7 +148,7 @@ class TestDuckDBQueryExecution:
         backend = DuckDBBackend(db_path_override=temp_db)
 
         result = backend.execute_query(
-            "SELECT * FROM patients WHERE subject_id = 999", test_dataset
+            "SELECT * FROM facilities WHERE pk_unique_id = 999", test_dataset
         )
 
         assert result.success is True
@@ -185,13 +185,13 @@ class TestDuckDBTableOperations:
 
         tables = backend.get_table_list(test_dataset)
 
-        assert "patients" in tables
+        assert "facilities" in tables
 
     def test_get_table_info(self, test_dataset, temp_db):
         """Test getting table schema info."""
         backend = DuckDBBackend(db_path_override=temp_db)
 
-        result = backend.get_table_info("patients", test_dataset)
+        result = backend.get_table_info("facilities", test_dataset)
 
         assert result.success is True
         assert result.dataframe is not None
@@ -210,7 +210,7 @@ class TestDuckDBTableOperations:
         """Test getting sample data from table."""
         backend = DuckDBBackend(db_path_override=temp_db)
 
-        result = backend.get_sample_data("patients", test_dataset, limit=2)
+        result = backend.get_sample_data("facilities", test_dataset, limit=2)
 
         assert result.success is True
         # Should return at most 2 rows
@@ -235,7 +235,7 @@ class TestDuckDBBackendInfo:
         backend = DuckDBBackend()
 
         with patch(
-            "m4.core.backends.duckdb.get_default_database_path"
+            "oasis.core.backends.duckdb.get_default_database_path"
         ) as mock_get_path:
             mock_get_path.return_value = None
 
@@ -386,11 +386,11 @@ class TestDuckDBEdgeCases:
         backend = DuckDBBackend(db_path_override=temp_db)
 
         # Test negative limit (should be clamped to 1)
-        result = backend.get_sample_data("patients", test_dataset, limit=-5)
+        result = backend.get_sample_data("facilities", test_dataset, limit=-5)
         assert result.row_count <= 1
 
         # Test excessive limit (should be clamped to 100)
-        result = backend.get_sample_data("patients", test_dataset, limit=1000)
+        result = backend.get_sample_data("facilities", test_dataset, limit=1000)
         assert result.row_count <= 100
 
     def test_get_table_list_empty_database(self, test_dataset):
@@ -415,7 +415,7 @@ class TestDuckDBEdgeCases:
         backend = DuckDBBackend(db_path_override=temp_db)
 
         def execute_query():
-            return backend.execute_query("SELECT * FROM patients", test_dataset)
+            return backend.execute_query("SELECT * FROM facilities", test_dataset)
 
         # Run 5 concurrent queries
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
@@ -432,7 +432,7 @@ class TestDuckDBEdgeCases:
         backend = DuckDBBackend(db_path_override=temp_db)
 
         result = backend.execute_query(
-            "SELECT COUNT(*) as cnt, AVG(anchor_age) as avg_age FROM patients",
+            "SELECT COUNT(*) as cnt, AVG(number_beds) as avg_beds FROM facilities",
             test_dataset,
         )
 
@@ -447,10 +447,10 @@ class TestDuckDBEdgeCases:
         result = backend.execute_query(
             """
             SELECT
-                subject_id,
-                gender,
-                ROW_NUMBER() OVER (ORDER BY subject_id) as row_num
-            FROM patients
+                pk_unique_id,
+                name,
+                ROW_NUMBER() OVER (ORDER BY pk_unique_id) as row_num
+            FROM facilities
             """,
             test_dataset,
         )
@@ -464,7 +464,7 @@ class TestDuckDBEdgeCases:
         backend = DuckDBBackend(db_path_override=temp_db)
 
         result = backend.execute_query(
-            "SELCT * FROM patients",  # Typo in SELECT
+            "SELCT * FROM facilities",  # Typo in SELECT
             test_dataset,
         )
 
@@ -483,7 +483,7 @@ def schema_dataset():
     return DatasetDefinition(
         name="schema-test",
         modalities={Modality.TABULAR},
-        schema_mapping={"hosp": "mimiciv_hosp", "icu": "mimiciv_icu"},
+        schema_mapping={"": "vf"},
     )
 
 
@@ -496,36 +496,36 @@ def schema_db(schema_dataset):
         db_path = Path(tmpdir) / "schema_test.duckdb"
         conn = duckdb.connect(str(db_path))
 
-        conn.execute("CREATE SCHEMA mimiciv_hosp")
-        conn.execute("CREATE SCHEMA mimiciv_icu")
+        conn.execute("CREATE SCHEMA vf")
 
         conn.execute(
             """
-            CREATE TABLE mimiciv_hosp.patients (
-                subject_id INTEGER PRIMARY KEY,
-                gender VARCHAR,
-                anchor_age INTEGER
+            CREATE TABLE vf.facilities (
+                pk_unique_id INTEGER PRIMARY KEY,
+                name VARCHAR,
+                number_beds INTEGER
             )
             """
         )
         conn.execute(
             """
-            INSERT INTO mimiciv_hosp.patients VALUES
-            (1, 'M', 65), (2, 'F', 42)
+            INSERT INTO vf.facilities VALUES
+            (1, 'Tamale Teaching Hospital', 200),
+            (2, 'Korle Bu Teaching Hospital', 1600)
             """
         )
 
         conn.execute(
             """
-            CREATE TABLE mimiciv_icu.icustays (
-                subject_id INTEGER,
-                stay_id INTEGER PRIMARY KEY
+            CREATE TABLE vf.regions (
+                region_id INTEGER PRIMARY KEY,
+                region_name VARCHAR
             )
             """
         )
         conn.execute(
             """
-            INSERT INTO mimiciv_icu.icustays VALUES (1, 10), (2, 20)
+            INSERT INTO vf.regions VALUES (1, 'Northern'), (2, 'Greater Accra')
             """
         )
         conn.close()
@@ -540,15 +540,15 @@ class TestSchemaQualifiedTableList:
         backend = DuckDBBackend(db_path_override=schema_db)
         tables = backend.get_table_list(schema_dataset)
 
-        assert "mimiciv_hosp.patients" in tables
-        assert "mimiciv_icu.icustays" in tables
+        assert "vf.facilities" in tables
+        assert "vf.regions" in tables
 
     def test_fallback_to_main_schema(self, test_dataset, temp_db):
         """Databases without custom schemas fall back to main."""
         backend = DuckDBBackend(db_path_override=temp_db)
         tables = backend.get_table_list(test_dataset)
 
-        assert "patients" in tables
+        assert "facilities" in tables
 
 
 class TestSchemaQualifiedTableInfo:
@@ -556,19 +556,19 @@ class TestSchemaQualifiedTableInfo:
 
     def test_schema_qualified_info(self, schema_dataset, schema_db):
         backend = DuckDBBackend(db_path_override=schema_db)
-        result = backend.get_table_info("mimiciv_hosp.patients", schema_dataset)
+        result = backend.get_table_info("vf.facilities", schema_dataset)
 
         assert result.success is True
         assert result.dataframe is not None
         assert "name" in result.dataframe.columns
         col_names = result.dataframe["name"].tolist()
-        assert "subject_id" in col_names
-        assert "gender" in col_names
+        assert "pk_unique_id" in col_names
+        assert "name" in col_names
 
     def test_simple_name_still_works(self, test_dataset, temp_db):
         """PRAGMA table_info path for unqualified names."""
         backend = DuckDBBackend(db_path_override=temp_db)
-        result = backend.get_table_info("patients", test_dataset)
+        result = backend.get_table_info("facilities", test_dataset)
 
         assert result.success is True
         assert "name" in result.dataframe.columns
@@ -577,7 +577,7 @@ class TestSchemaQualifiedTableInfo:
         backend = DuckDBBackend(db_path_override=schema_db)
 
         with pytest.raises(TableNotFoundError):
-            backend.get_table_info("mimiciv_hosp.nonexistent", schema_dataset)
+            backend.get_table_info("vf.nonexistent", schema_dataset)
 
 
 class TestSchemaQualifiedSampleData:
@@ -586,17 +586,17 @@ class TestSchemaQualifiedSampleData:
     def test_schema_qualified_sample(self, schema_dataset, schema_db):
         backend = DuckDBBackend(db_path_override=schema_db)
         result = backend.get_sample_data(
-            "mimiciv_hosp.patients", schema_dataset, limit=1
+            "vf.facilities", schema_dataset, limit=1
         )
 
         assert result.success is True
         assert result.row_count <= 1
         assert result.dataframe is not None
-        assert "subject_id" in result.dataframe.columns
+        assert "pk_unique_id" in result.dataframe.columns
 
     def test_simple_name_sample(self, test_dataset, temp_db):
         backend = DuckDBBackend(db_path_override=temp_db)
-        result = backend.get_sample_data("patients", test_dataset, limit=2)
+        result = backend.get_sample_data("facilities", test_dataset, limit=2)
 
         assert result.success is True
         assert result.row_count <= 2

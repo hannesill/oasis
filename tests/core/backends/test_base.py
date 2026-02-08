@@ -1,4 +1,4 @@
-"""Tests for m4.core.backends.base module.
+"""Tests for oasis.core.backends.base module.
 
 Tests cover:
 - QueryResult dataclass
@@ -8,7 +8,7 @@ Tests cover:
 
 import pandas as pd
 
-from m4.core.backends.base import (
+from oasis.core.backends.base import (
     Backend,
     BackendError,
     ConnectionError,
@@ -71,7 +71,7 @@ class TestBackendErrors:
 
     def test_backend_error_recoverable(self):
         """Test BackendError with recoverable flag."""
-        error = BackendError("test error", backend="bigquery", recoverable=True)
+        error = BackendError("test error", backend="duckdb", recoverable=True)
 
         assert error.recoverable is True
 
@@ -182,71 +182,25 @@ class TestSanitizeErrorMessage:
         msg = sanitize_error_message(err, "duckdb")
         assert "Connection error" in msg
 
-    # --- BigQuery-specific errors (new patterns) ---
-
-    def test_bigquery_404_dataset_not_found(self):
-        """BigQuery 404 when dataset doesn't exist."""
-        err = Exception("404 Not Found: Dataset my-project:my_dataset was not found")
-        msg = sanitize_error_message(err, "bigquery")
-        assert "Resource not found" in msg
-
-    def test_bigquery_404_project_not_found(self):
-        """BigQuery 404 when project doesn't exist."""
-        err = Exception("404 Not found: Project bad-project was not found")
-        msg = sanitize_error_message(err, "bigquery")
-        assert "Resource not found" in msg
-
-    def test_bigquery_billing_error(self):
-        """BigQuery billing not enabled."""
-        err = Exception(
-            "Access Denied: BigQuery BigQuery: Billing is not enabled for this project"
-        )
-        msg = sanitize_error_message(err, "bigquery")
-        assert "Billing error" in msg
-
-    def test_bigquery_403_forbidden(self):
-        """BigQuery 403 Forbidden."""
-        err = Exception("403 Forbidden: Access denied for user@example.com")
-        msg = sanitize_error_message(err, "bigquery")
-        assert "Permission denied" in msg
-
-    def test_bigquery_permission_denied(self):
-        """BigQuery access denied."""
-        err = Exception("Access Denied: permission denied for dataset")
-        msg = sanitize_error_message(err, "bigquery")
-        assert "Permission denied" in msg
-
-    def test_bigquery_quota_exceeded(self):
-        """BigQuery quota exceeded."""
-        err = Exception("Quota exceeded: Too many concurrent queries")
-        msg = sanitize_error_message(err, "bigquery")
-        assert "Quota exceeded" in msg
-
-    def test_bigquery_rate_limit(self):
-        """BigQuery rate limit."""
-        err = Exception("Rate limit exceeded for API calls")
-        msg = sanitize_error_message(err, "bigquery")
-        assert "rate limited" in msg.lower() or "Quota exceeded" in msg
-
     # --- Generic fallback ---
 
     def test_generic_fallback_includes_error_type(self):
         """Generic fallback includes the exception type name."""
         err = ValueError("some unexpected internal error")
-        msg = sanitize_error_message(err, "bigquery")
+        msg = sanitize_error_message(err, "duckdb")
         assert "Query execution failed" in msg
         assert "ValueError" in msg
 
     def test_generic_fallback_for_unknown_exception(self):
         """Generic fallback for completely unknown errors."""
 
-        class CustomBQError(Exception):
+        class CustomError(Exception):
             pass
 
-        err = CustomBQError("something went wrong")
-        msg = sanitize_error_message(err, "bigquery")
+        err = CustomError("something went wrong")
+        msg = sanitize_error_message(err, "duckdb")
         assert "Query execution failed" in msg
-        assert "CustomBQError" in msg
+        assert "CustomError" in msg
 
     # --- Additional edge cases and variant patterns ---
 
@@ -261,20 +215,6 @@ class TestSanitizeErrorMessage:
         err = Exception("Parse error: unexpected token")
         msg = sanitize_error_message(err, "duckdb")
         assert "SQL syntax error" in msg
-
-    def test_bigquery_access_denied(self):
-        """BigQuery 'Access Denied' triggers permission denied."""
-        err = Exception("Access Denied: Access is denied")
-        msg = sanitize_error_message(err, "bigquery")
-        assert "Permission denied" in msg
-
-    def test_bigquery_unauthorized(self):
-        """BigQuery 401 Unauthorized triggers permission denied."""
-        err = Exception(
-            "401 Unauthorized: Request had invalid authentication credentials"
-        )
-        msg = sanitize_error_message(err, "bigquery")
-        assert "Permission denied" in msg
 
     def test_timed_out_variant(self):
         """'timed out' variant triggers timeout message."""
@@ -295,16 +235,10 @@ class TestSanitizeErrorMessage:
         assert len(msg) < 300
         assert msg.endswith("...")
 
-    def test_billing_before_permission(self):
-        """Billing check has priority over permission denied check."""
-        err = Exception("Access Denied: Billing not enabled for project")
-        msg = sanitize_error_message(err, "bigquery")
-        assert "Billing error" in msg
-
     def test_backend_name_logged(self, caplog):
         """Backend name is included in debug log message."""
         import logging
 
-        with caplog.at_level(logging.DEBUG, logger="m4"):
-            sanitize_error_message(Exception("test error"), "bigquery")
-        assert "[bigquery]" in caplog.text
+        with caplog.at_level(logging.DEBUG, logger="oasis"):
+            sanitize_error_message(Exception("test error"), "duckdb")
+        assert "[duckdb]" in caplog.text

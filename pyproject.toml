@@ -3,9 +3,9 @@ requires = ["pdm-backend"]
 build-backend = "pdm.backend"
 
 [project]
-name = "m4-infra"
+name = "oasis-infra"
 dynamic = ["version"]
-description = "Infrastructure for AI-assisted clinical research with EHR datasets"
+description = "Orchestrated Agentic System for Intelligent healthcare Synthesis"
 requires-python = ">=3.10"
 authors = [
     { name = "Rafi Al Attrach", email = "rafiaa@mit.edu" },
@@ -19,7 +19,7 @@ maintainers = [
 ]
 readme = "README.md"
 license = "MIT"
-keywords = ["mimic-iv", "clinical-data", "mcp", "llm", "medical", "healthcare", "duckdb", "bigquery"]
+keywords = ["healthcare", "mcp", "llm", "medical", "duckdb", "ghana", "medical-deserts"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
@@ -43,6 +43,9 @@ dependencies = [
     "pyarrow>=10.0.0",
     "sqlparse>=0.4.0",
     "duckdb>=1.4.1",
+    "mlflow>=2.16.0",
+    "databricks-sdk>=0.30.0",
+    "sentence-transformers>=3.0.0",
 ]
 
 [dependency-groups]
@@ -56,24 +59,24 @@ dev = [
 ]
 
 [project.scripts]
-m4 = "m4.cli:app"
-m4-infra = "m4.mcp_server:main"  # Primary entry point (enables `uvx m4-infra`)
-m4-mcp = "m4.mcp_server:main"  # Kept for backwards compatibility
-m4-mcp-server = "m4.mcp_server:main"  # Kept for backwards compatibility
+oasis = "oasis.cli:app"
+oasis-infra = "oasis.mcp_server:main"  # Primary entry point (enables `uvx oasis-infra`)
+oasis-mcp = "oasis.mcp_server:main"  # Kept for backwards compatibility
+oasis-mcp-server = "oasis.mcp_server:main"  # Kept for backwards compatibility
 
 [project.urls]
-Homepage = "https://github.com/rafiattrach/m4"
-Repository = "https://github.com/rafiattrach/m4"
-Documentation = "https://github.com/rafiattrach/m4#readme"
-Issues = "https://github.com/rafiattrach/m4/issues"
-Changelog = "https://github.com/rafiattrach/m4/releases"
+Homepage = "https://github.com/hannesill/oasis"
+Repository = "https://github.com/hannesill/oasis"
+Documentation = "https://github.com/hannesill/oasis#readme"
+Issues = "https://github.com/hannesill/oasis/issues"
+Changelog = "https://github.com/hannesill/oasis/releases"
 
 [tool.pdm.version]
 source = "file"
-path = "src/m4/__init__.py"
+path = "src/oasis/__init__.py"
 
 [tool.pdm.build]
-includes = ["src/m4/", "src/m4/skills/**/*.md", "src/m4/apps/**/*.html"]
+includes = ["src/oasis/", "src/oasis/skills/**/*.md", "src/oasis/apps/**/*.html"]
 
 [tool.ruff]
 line-length = 88
@@ -98,15 +101,12 @@ ignore = [
 # Ruff's default formatter will be used.
 
 [tool.ruff.lint.isort]
-known-first-party = ["m4"]
+known-first-party = ["oasis"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-addopts = "-m 'not requires_mimic_iv'"
-markers = [
-    "requires_mimic_iv: test requires local MIMIC-IV data (run with: uv run pytest -m requires_mimic_iv)",
-]
+markers = []
 # Filter out Jupyter deprecation warning
 filterwarnings = [
     "ignore::DeprecationWarning:jupyter_client.*",

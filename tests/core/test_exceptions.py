@@ -1,4 +1,4 @@
-"""Tests for m4.core.exceptions module.
+"""Tests for oasis.core.exceptions module.
 
 Verifies the exception hierarchy, constructor attributes, and
 inheritance chains that the MCP server relies on for error handling.
@@ -8,11 +8,11 @@ the MCP server instead of returning user-friendly messages.
 
 import pytest
 
-from m4.core.exceptions import (
+from oasis.core.exceptions import (
     BackendError,
     ConnectionError,
     DatasetError,
-    M4Error,
+    OASISError,
     ModalityError,
     QueryError,
     QueryExecutionError,
@@ -21,11 +21,11 @@ from m4.core.exceptions import (
 )
 
 
-class TestM4ErrorHierarchy:
+class TestOASISErrorHierarchy:
     """Verify the complete exception inheritance tree."""
 
-    def test_all_exceptions_inherit_from_m4_error(self):
-        """Every M4 exception must be catchable via M4Error."""
+    def test_all_exceptions_inherit_from_oasis_error(self):
+        """Every OASIS exception must be catchable via OASISError."""
         exception_classes = [
             QueryError,
             SecurityError,
@@ -37,7 +37,7 @@ class TestM4ErrorHierarchy:
             QueryExecutionError,
         ]
         for cls in exception_classes:
-            assert issubclass(cls, M4Error), f"{cls.__name__} is not an M4Error"
+            assert issubclass(cls, OASISError), f"{cls.__name__} is not an OASISError"
 
     def test_backend_subclasses(self):
         """Backend-specific errors inherit from BackendError."""
@@ -98,14 +98,14 @@ class TestModalityErrorAttributes:
         """ModalityError stores tool name and modality sets."""
         err = ModalityError(
             "Incompatible",
-            tool_name="search_notes",
-            required_modalities={"NOTES"},
-            available_modalities={"TABULAR"},
+            tool_name="execute_query",
+            required_modalities={"TABULAR"},
+            available_modalities=set(),
         )
         assert str(err) == "Incompatible"
-        assert err.tool_name == "search_notes"
-        assert err.required_modalities == {"NOTES"}
-        assert err.available_modalities == {"TABULAR"}
+        assert err.tool_name == "execute_query"
+        assert err.required_modalities == {"TABULAR"}
+        assert err.available_modalities == set()
 
     def test_defaults(self):
         """ModalityError defaults modality sets to empty."""
@@ -133,18 +133,18 @@ class TestBackendErrorAttributes:
 
     def test_table_not_found_auto_message(self):
         """TableNotFoundError auto-generates message from table name."""
-        err = TableNotFoundError("mimiciv_hosp.patients", backend="duckdb")
-        assert "mimiciv_hosp.patients" in str(err)
-        assert err.table_name == "mimiciv_hosp.patients"
+        err = TableNotFoundError("vf.facilities", backend="duckdb")
+        assert "vf.facilities" in str(err)
+        assert err.table_name == "vf.facilities"
         assert err.recoverable is False
 
     def test_query_execution_error_stores_sql(self):
         """QueryExecutionError stores the failed SQL."""
         err = QueryExecutionError(
-            "Syntax error", sql="SELECT * FORM t", backend="bigquery"
+            "Syntax error", sql="SELECT * FORM t", backend="duckdb"
         )
         assert err.sql == "SELECT * FORM t"
-        assert err.backend == "bigquery"
+        assert err.backend == "duckdb"
         assert err.recoverable is False
 
 
@@ -162,8 +162,8 @@ class TestExceptionCatching:
         with pytest.raises(BackendError):
             raise QueryExecutionError("fail", sql="SELECT 1")
 
-    def test_catch_all_via_m4_error(self):
-        """All exceptions can be caught via M4Error (MCP server pattern)."""
+    def test_catch_all_via_oasis_error(self):
+        """All exceptions can be caught via OASISError (MCP server pattern)."""
         errors = [
             QueryError("q"),
             SecurityError("s"),
@@ -175,5 +175,5 @@ class TestExceptionCatching:
             QueryExecutionError("e", sql="x"),
         ]
         for err in errors:
-            with pytest.raises(M4Error):
+            with pytest.raises(OASISError):
                 raise err
