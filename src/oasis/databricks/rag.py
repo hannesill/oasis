@@ -205,7 +205,7 @@ def register_rag_tools(mcp) -> None:
         return _get_engine().search(query, top_k)
 
     @mcp.tool()
-    def search_facility_capabilities(query: str, top_k: int = 10) -> str:
+    def databricks_search_facility_capabilities(query: str, top_k: int = 10) -> str:
         """Search facility procedures, equipment, and capabilities via semantic RAG.
 
         Finds facilities whose free-form text descriptions match your query

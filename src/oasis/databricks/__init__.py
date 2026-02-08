@@ -38,7 +38,7 @@ def register_databricks_tools(mcp) -> None:
         from oasis.databricks.rag import register_rag_tools
 
         register_rag_tools(mcp)
-        logger.info("Registered: search_facility_capabilities (RAG)")
+        logger.info("Registered: databricks_search_facility_capabilities (RAG)")
     except Exception as e:
         logger.warning("RAG tool registration failed: %s", e)
 
@@ -47,13 +47,13 @@ def register_databricks_tools(mcp) -> None:
         from oasis.databricks.genie import register_genie_tools
 
         register_genie_tools(mcp)
-        logger.info("Registered: ask_genie (Databricks text-to-SQL)")
+        logger.info("Registered: databricks_ask_genie (Databricks text-to-SQL)")
     except Exception as e:
         logger.warning("Genie tool registration failed: %s", e)
 
     # 4. Register citation trace retrieval tool
     try:
         register_tracing_tools(mcp)
-        logger.info("Registered: get_citation_trace (MLflow)")
+        logger.info("Registered: databricks_mlflow_citation_trace (MLflow)")
     except Exception as e:
         logger.warning("Tracing tool registration failed: %s", e)

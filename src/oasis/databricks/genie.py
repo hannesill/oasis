@@ -103,7 +103,7 @@ def register_genie_tools(mcp) -> None:
         return _ask_genie(question)
 
     @mcp.tool()
-    def ask_genie(question: str) -> str:
+    def databricks_ask_genie(question: str) -> str:
         """🧞 Ask a natural language question via Databricks Genie (text-to-SQL).
 
         Sends your question to a Databricks Genie space configured with the

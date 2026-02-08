@@ -104,7 +104,7 @@ def register_tracing_tools(mcp) -> None:
     """Register the citation trace retrieval tool with the MCP server."""
 
     @mcp.tool()
-    def get_citation_trace(limit: int = 5) -> str:
+    def databricks_mlflow_citation_trace(limit: int = 5) -> str:
         """Retrieve recent OASIS tool traces for citation transparency.
 
         Shows which data was used at each reasoning step, enabling
