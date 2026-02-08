@@ -1,4 +1,4 @@
-# OASIS
+# 🌴 OASIS
 
 **Orchestrated Agentic System for Intelligent healthcare Synthesis**
 
