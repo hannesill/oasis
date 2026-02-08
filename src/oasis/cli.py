@@ -837,5 +837,85 @@ def config_cmd(
                 warning(f"Skills installation failed: {e}")
 
 
+@app.command("clean")
+def clean_cmd(
+    dataset_name: Annotated[
+        str,
+        typer.Argument(
+            help="Dataset to clean (default: vf-ghana).",
+            metavar="DATASET_NAME",
+        ),
+    ] = "vf-ghana",
+    src: Annotated[
+        str | None,
+        typer.Option(
+            "--src",
+            help="Path to raw CSV file. Auto-detected if omitted.",
+        ),
+    ] = None,
+    skip_geocoding: Annotated[
+        bool,
+        typer.Option(
+            "--skip-geocoding",
+            help="Skip the geocoding step (useful when GOOGLE_MAPS_API_KEY is not set).",
+        ),
+    ] = False,
+):
+    """
+    Clean a raw facility dataset: consolidate rows, filter junk, build
+    geocoding queries, and geocode via Google Maps API.
+
+    Requires **GOOGLE_MAPS_API_KEY** env var for geocoding (or use --skip-geocoding).
+
+    Output is saved as vf_ghana_clean.csv in the project root.
+
+    Examples:
+
+    * oasis clean                          # Full pipeline
+
+    * oasis clean --skip-geocoding         # Skip geocoding (no API key needed)
+
+    * oasis clean --src data/raw.csv
+    """
+    import logging as _logging
+    import os
+
+    from oasis.cleaning.pipeline import run_pipeline
+
+    # Ensure cleaning logs are visible
+    cleaning_logger = _logging.getLogger("oasis.cleaning")
+    if not cleaning_logger.handlers:
+        handler = _logging.StreamHandler()
+        handler.setFormatter(_logging.Formatter("%(name)s %(levelname)s: %(message)s"))
+        cleaning_logger.addHandler(handler)
+    cleaning_logger.setLevel(_logging.INFO)
+
+    console.print()
+    print_banner("Data Cleaning Pipeline", f"Dataset: {dataset_name}")
+
+    if not skip_geocoding and not os.environ.get("GOOGLE_MAPS_API_KEY"):
+        warning("GOOGLE_MAPS_API_KEY not set. Geocoding will be skipped.")
+        warning("Set it with: $env:GOOGLE_MAPS_API_KEY = 'your-key'")
+        skip_geocoding = True
+
+    input_path = Path(src).resolve() if src else None
+
+    try:
+        df = run_pipeline(
+            input_csv=input_path,
+            skip_geocoding=skip_geocoding,
+        )
+        console.print()
+        success(f"Cleaned {len(df)} facilities -> vf_ghana_clean.csv")
+
+    except FileNotFoundError as e:
+        error(str(e))
+        raise typer.Exit(code=1)
+    except Exception as e:
+        logger.error("Pipeline failed: %s", e, exc_info=True)
+        error(f"Pipeline failed: {e}")
+        raise typer.Exit(code=1)
+
+
 if __name__ == "__main__":
     app()
