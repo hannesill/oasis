@@ -119,7 +119,7 @@ class TestDatasetRegistry:
         DatasetRegistry.reset()
         ds = DatasetRegistry.get("vf-ghana")
         assert ds.schema_mapping == {"": "vf"}
-        assert ds.primary_verification_table == "vf.facilities"
+        assert ds.primary_verification_table == "vf.vf_ghana"
 
 
 class TestDatasetRegistryEdgeCases:

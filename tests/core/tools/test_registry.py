@@ -285,8 +285,8 @@ class TestInitTools:
         assert "get_table_info" in tool_names
         assert "execute_query" in tool_names
 
-        # Total: 5 tools (2 management + 3 tabular)
-        assert len(all_tools) == 5
+        # Total: 10 tools (2 management + 3 tabular + 5 geospatial)
+        assert len(all_tools) == 10
 
         # Cleanup
         reset_tools()
@@ -302,9 +302,9 @@ class TestInitTools:
         init_tools()
         init_tools()
 
-        # Should still have exactly 5 tools
+        # Should still have exactly 10 tools
         all_tools = ToolRegistry.list_all()
-        assert len(all_tools) == 5
+        assert len(all_tools) == 10
 
         reset_tools()
 
@@ -313,14 +313,14 @@ class TestInitTools:
         from oasis.core.tools import init_tools, reset_tools
 
         init_tools()
-        assert len(ToolRegistry.list_all()) == 5
+        assert len(ToolRegistry.list_all()) == 10
 
         reset_tools()
         assert len(ToolRegistry.list_all()) == 0
 
         # Can reinitialize after reset
         init_tools()
-        assert len(ToolRegistry.list_all()) == 5
+        assert len(ToolRegistry.list_all()) == 10
 
         reset_tools()
 

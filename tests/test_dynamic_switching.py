@@ -59,4 +59,4 @@ def test_dynamic_dataset_switching(tmp_path, monkeypatch):
     full_ds = DatasetRegistry.get("vf-ghana")
     assert full_ds is not None
     assert full_ds.description == "Virtue Foundation Ghana Healthcare Facilities"
-    assert full_ds.primary_verification_table == "vf.facilities"
+    assert full_ds.primary_verification_table == "vf.vf_ghana"

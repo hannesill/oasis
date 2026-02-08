@@ -12,8 +12,6 @@ This directory contains skills for the OASIS framework, focused on the Virtue Fo
 | idp-extraction | Patterns for parsing free-form medical text into structured facts |
 | medical-desert-analysis | How to identify and characterize healthcare coverage gaps |
 
-> **Note:** These skills are planned but not yet implemented. See `CLAUDE.md` for details.
-
 ## System Skills
 
 ### OASIS Framework

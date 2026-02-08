@@ -94,12 +94,10 @@ Claude Desktop → OASIS MCP Server (VF tools) + Medical Desert Mapper App (inte
 5. **`extract_capabilities`** — IDP re-parsing of free-form text with enhanced extraction (covers VF validation queries)
 
 ### Medical Desert Mapper App
-Mapbox GL JS map (chosen for 3D), facilities as colored markers, H3 hex grid overlay, filter controls, facility detail sidebar, desert highlighting. Visually stunning — centerpiece of the demo. See `docs/OASIS_APPS.md` for protocol, `src/oasis/apps/__init__.py` for registration. Detailed implementation plan in `PLAN.md`.
+Mapbox GL JS map (chosen for 3D), facilities as colored markers, heatmap overlay, filter controls, facility detail sidebar, desert highlighting. Centerpiece of the demo. See `docs/OASIS_APPS.md` for protocol, `src/oasis/apps/__init__.py` for registration.
 
-### Skills (in `src/oasis/skills/clinical/`)
-1. **`vf-schema`** — VF Ghana data structure, column semantics, query patterns
-2. **`idp-extraction`** — Parsing free-form medical text into structured facts
-3. **`medical-desert-analysis`** — Identifying and characterizing healthcare coverage gaps
+### Skills (in `src/oasis/skills/`)
+Skills are markdown files with YAML frontmatter. The framework supports `clinical` and `system` categories. See `src/oasis/skills/SKILL_FORMAT.md` for the spec and `SKILLS_INDEX.md` for the index.
 
 ## Development Conventions
 
@@ -108,7 +106,7 @@ Mapbox GL JS map (chosen for 3D), facilities as colored markers, H3 hex grid ove
 - **Canonical schema names** — `schema.table` format (e.g., `vf.facilities`)
 - **Modality-based filtering** — tools declare `required_modalities: frozenset[Modality]`
 - **DuckDB only** — no cloud backends (except optional Databricks for RAG/tracing)
-- **Skills are markdown** — YAML frontmatter in `src/oasis/skills/clinical/<name>/SKILL.md`
+- **Skills are markdown** — YAML frontmatter in `src/oasis/skills/<category>/<name>/SKILL.md`
 - Branch: `main` (hackathon, move fast). Don't commit secrets or node_modules.
 
 ## Demo Script (under 2 minutes — bonus for conciseness)
@@ -123,10 +121,10 @@ Mapbox GL JS map (chosen for 3D), facilities as colored markers, H3 hex grid ove
 
 | What | Where |
 |------|-------|
-| Challenge description | `CHALLENGE.md` |
-| VF Agent Questions (acceptance criteria) | `Virtue Foundation Agent Questions - Hack Nation.md` |
+| Challenge description | `docs/challenge/CHALLENGE.md` |
+| VF Agent Questions (acceptance criteria) | `docs/challenge/Virtue Foundation Agent Questions - Hack Nation.md` |
 | VF Ghana data | `vf-ghana.csv` |
-| Schema docs | `Virtue Foundation Scheme Documentation.md` |
+| Schema docs | `docs/challenge/Virtue Foundation Scheme Documentation.md` |
 | Tool protocol | `src/oasis/core/tools/base.py` |
 | MCP server | `src/oasis/mcp_server.py` |
 | Apps guide | `docs/OASIS_APPS.md` |
