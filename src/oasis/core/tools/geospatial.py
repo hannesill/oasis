@@ -260,6 +260,17 @@ def _spiral_offset(
 EARTH_RADIUS_KM = 6371.0
 
 
+def _clean_val(v: Any) -> Any:
+    """Coerce pandas NaN/NaT to None so json.dumps produces valid JSON."""
+    if v is None:
+        return None
+    if isinstance(v, float) and (pd.isna(v) or math.isnan(v)):
+        return None
+    if pd.isna(v):
+        return None
+    return v
+
+
 def haversine_distance(
     lat1: float, lon1: float, lat2: float, lon2: float
 ) -> float:
@@ -494,10 +505,11 @@ class FindFacilitiesInRadiusTool:
                 facilityTypeId,
                 description,
                 phone_numbers,
-                unique_id
+                unique_id,
+                lat,
+                "long"
             FROM "vf"."vf_ghana"
-            WHERE address_city IS NOT NULL
-                AND TRIM(address_city) != ''
+            WHERE 1=1
                 {condition_filter_sql}
         """
 
@@ -520,64 +532,54 @@ class FindFacilitiesInRadiusTool:
                 "summary": f"No facilities found matching criteria near {params.location}.",
             }
 
-        # Pre-compute spiral positions for ALL facilities (consistent with map)
-        # Pass 1: resolve each facility to a geocode key and group
-        row_data: list[tuple[Any, str, float, float]] = []  # (row, key, lat, lng)
-        groups: dict[str, list[int]] = {}
-
-        for _, row in df.iterrows():
-            city = str(row.get("address_city", "")).strip()
-            if not city:
-                continue
-
-            facility_coords = resolve_location(city)
-            if facility_coords is None:
-                addr = str(row.get("address_line1", "")).strip()
-                if addr:
-                    facility_coords = resolve_location(addr)
-            if facility_coords is None:
-                region = str(row.get("address_stateOrRegion", "")).strip()
-                if region:
-                    facility_coords = resolve_location(region)
-            if facility_coords is None:
-                continue
-
-            key = f"{facility_coords[0]:.4f},{facility_coords[1]:.4f}"
-            idx = len(row_data)
-            row_data.append((row, key, facility_coords[0], facility_coords[1]))
-            groups.setdefault(key, []).append(idx)
-
-        # Sort each group alphabetically by name (deterministic)
-        for key in groups:
-            groups[key].sort(key=lambda ri: str(row_data[ri][0].get("name", "")))
-
-        # Pass 2: assign spiral offsets and filter by distance
+        # Resolve coordinates: use DB lat/long when available, fall back to city lookup
         facilities = []
-        for key, members in groups.items():
-            total = len(members)
-            base_lat = row_data[members[0]][2]
-            base_lng = row_data[members[0]][3]
-            for rank, ri in enumerate(members):
-                lat, lng = _spiral_offset(rank, total, base_lat, base_lng)
-                dist = haversine_distance(center[0], center[1], lat, lng)
-                if dist <= params.radius_km:
-                    row = row_data[ri][0]
-                    facilities.append(
-                        {
-                            "name": row.get("name", "Unknown"),
-                            "city": str(row.get("address_city", "")).strip(),
-                            "region": row.get("address_stateOrRegion", ""),
-                            "distance_km": round(dist, 2),
-                            "lat": lat,
-                            "lng": lng,
-                            "facility_type": row.get("facilityTypeId", ""),
-                            "specialties": row.get("specialties", ""),
-                            "procedures": row.get("procedure", ""),
-                            "equipment": row.get("equipment", ""),
-                            "capability": row.get("capability", ""),
-                            "unique_id": row.get("unique_id", ""),
-                        }
-                    )
+        for _, row in df.iterrows():
+            db_lat = row.get("lat")
+            db_lng = row.get("long")
+
+            # Use DB coordinates if valid
+            if (
+                db_lat is not None
+                and db_lng is not None
+                and not pd.isna(db_lat)
+                and not pd.isna(db_lng)
+            ):
+                f_lat, f_lng = float(db_lat), float(db_lng)
+            else:
+                # Fall back to city-based geocoding
+                city = str(row.get("address_city", "")).strip()
+                facility_coords = resolve_location(city) if city else None
+                if facility_coords is None:
+                    addr = str(row.get("address_line1", "")).strip()
+                    if addr:
+                        facility_coords = resolve_location(addr)
+                if facility_coords is None:
+                    region = str(row.get("address_stateOrRegion", "")).strip()
+                    if region:
+                        facility_coords = resolve_location(region)
+                if facility_coords is None:
+                    continue
+                f_lat, f_lng = facility_coords
+
+            dist = haversine_distance(center[0], center[1], f_lat, f_lng)
+            if dist <= params.radius_km:
+                facilities.append(
+                    {
+                        "name": _clean_val(row.get("name")) or "Unknown",
+                        "city": str(row.get("address_city") or "").strip(),
+                        "region": _clean_val(row.get("address_stateOrRegion")) or "",
+                        "distance_km": round(dist, 2),
+                        "lat": f_lat,
+                        "lng": f_lng,
+                        "facility_type": _clean_val(row.get("facilityTypeId")) or "",
+                        "specialties": _clean_val(row.get("specialties")) or "",
+                        "procedures": _clean_val(row.get("procedure")) or "",
+                        "equipment": _clean_val(row.get("equipment")) or "",
+                        "capability": _clean_val(row.get("capability")) or "",
+                        "unique_id": _clean_val(row.get("unique_id")) or "",
+                    }
+                )
 
         # Sort by distance
         facilities.sort(key=lambda x: x["distance_km"])
@@ -718,11 +720,11 @@ class FindCoverageGapsTool:
                 equipment,
                 capability,
                 facilityTypeId,
-                unique_id
+                unique_id,
+                lat,
+                "long"
             FROM "vf"."vf_ghana"
-            WHERE address_city IS NOT NULL
-                AND TRIM(address_city) != ''
-                AND (
+            WHERE (
                     LOWER(specialties) LIKE '%{spec}%'
                     OR LOWER(procedure) LIKE '%{spec}%'
                     OR LOWER(capability) LIKE '%{spec}%'
@@ -738,24 +740,38 @@ class FindCoverageGapsTool:
 
         df = result.dataframe
 
-        # Geocode facilities
+        # Resolve coordinates: use DB lat/long when available, fall back to city lookup
         facility_coords: list[dict] = []
         if df is not None and not df.empty:
             for _, row in df.iterrows():
+                db_lat = row.get("lat")
+                db_lng = row.get("long")
                 city = str(row.get("address_city", "")).strip()
-                coords = resolve_location(city)
-                if coords is None:
-                    rgn = str(row.get("address_stateOrRegion", "")).strip()
-                    coords = resolve_location(rgn)
-                if coords:
-                    facility_coords.append(
-                        {
-                            "name": row.get("name", "Unknown"),
-                            "city": city,
-                            "lat": coords[0],
-                            "lng": coords[1],
-                        }
-                    )
+
+                if (
+                    db_lat is not None
+                    and db_lng is not None
+                    and not pd.isna(db_lat)
+                    and not pd.isna(db_lng)
+                ):
+                    f_lat, f_lng = float(db_lat), float(db_lng)
+                else:
+                    coords = resolve_location(city) if city else None
+                    if coords is None:
+                        rgn = str(row.get("address_stateOrRegion", "")).strip()
+                        coords = resolve_location(rgn)
+                    if coords is None:
+                        continue
+                    f_lat, f_lng = coords
+
+                facility_coords.append(
+                    {
+                        "name": row.get("name", "Unknown"),
+                        "city": city,
+                        "lat": f_lat,
+                        "lng": f_lng,
+                    }
+                )
 
         region_label = f" in {params.region}" if params.region else " in Ghana"
 
@@ -1093,11 +1109,11 @@ class GeocodeFacilitiesTool:
                 phone_numbers,
                 unique_id,
                 capacity,
-                numberDoctors
+                numberDoctors,
+                lat,
+                "long"
             FROM "vf"."vf_ghana"
-            WHERE address_city IS NOT NULL
-                AND TRIM(address_city) != ''
-                AND {where_clause}
+            WHERE {where_clause}
         """
 
         result = backend.execute_query(sql, dataset)
@@ -1110,69 +1126,50 @@ class GeocodeFacilitiesTool:
         not_geocoded = 0
 
         if df is not None and not df.empty:
-            # Pass 1: resolve each facility to a geocode key and group
-            resolved: list[tuple[int, str, float, float]] = []  # (idx, key, lat, lng)
-            groups: dict[str, list[int]] = {}  # key → list of indices into `resolved`
+            for _, row in df.iterrows():
+                db_lat = row.get("lat")
+                db_lng = row.get("long")
 
-            for idx, (_, row) in enumerate(df.iterrows()):
-                city = str(row.get("address_city", "")).strip()
-                coords = resolve_location(city)
-
-                if coords is None:
-                    region = str(row.get("address_stateOrRegion", "")).strip()
-                    coords = resolve_location(region)
-
-                if coords is None:
-                    not_geocoded += 1
-                    resolved.append((idx, "", 0.0, 0.0))
-                    continue
+                # Use DB coordinates if valid
+                if (
+                    db_lat is not None
+                    and db_lng is not None
+                    and not pd.isna(db_lat)
+                    and not pd.isna(db_lng)
+                ):
+                    f_lat, f_lng = float(db_lat), float(db_lng)
+                else:
+                    # Fall back to city-based geocoding
+                    city = str(row.get("address_city", "")).strip()
+                    coords = resolve_location(city) if city else None
+                    if coords is None:
+                        region = str(row.get("address_stateOrRegion", "")).strip()
+                        coords = resolve_location(region)
+                    if coords is None:
+                        not_geocoded += 1
+                        continue
+                    f_lat, f_lng = coords
 
                 geocoded += 1
-                key = f"{coords[0]:.4f},{coords[1]:.4f}"
-                resolved.append((idx, key, coords[0], coords[1]))
-                groups.setdefault(key, []).append(len(resolved) - 1)
-
-            # Sort each group alphabetically by facility name for deterministic order
-            for key in groups:
-                groups[key].sort(
-                    key=lambda ri: str(df.iloc[resolved[ri][0]].get("name", ""))
-                )
-
-            # Pass 2: assign spiral offsets per group
-            spiral_positions: dict[int, tuple[float, float]] = {}
-            for key, members in groups.items():
-                total = len(members)
-                base_lat = resolved[members[0]][2]
-                base_lng = resolved[members[0]][3]
-                for rank, ri in enumerate(members):
-                    spiral_positions[ri] = _spiral_offset(rank, total, base_lat, base_lng)
-
-            # Build GeoJSON features
-            for ri, (idx, key, _, _) in enumerate(resolved):
-                if not key:
-                    continue
-                row = df.iloc[idx]
-                lat, lng = spiral_positions[ri]
-
                 feature = {
                     "type": "Feature",
                     "geometry": {
                         "type": "Point",
-                        "coordinates": [lng, lat],
+                        "coordinates": [f_lng, f_lat],
                     },
                     "properties": {
-                        "name": row.get("name", "Unknown"),
-                        "city": str(row.get("address_city", "")).strip(),
-                        "region": row.get("address_stateOrRegion", ""),
-                        "facility_type": row.get("facilityTypeId", ""),
-                        "specialties": row.get("specialties", ""),
-                        "procedures": row.get("procedure", ""),
-                        "equipment": row.get("equipment", ""),
-                        "capability": row.get("capability", ""),
-                        "description": row.get("description", ""),
-                        "capacity": row.get("capacity", ""),
-                        "num_doctors": row.get("numberDoctors", ""),
-                        "unique_id": row.get("unique_id", ""),
+                        "name": _clean_val(row.get("name")) or "Unknown",
+                        "city": str(row.get("address_city") or "").strip(),
+                        "region": _clean_val(row.get("address_stateOrRegion")) or "",
+                        "facility_type": _clean_val(row.get("facilityTypeId")) or "",
+                        "specialties": _clean_val(row.get("specialties")) or "",
+                        "procedures": _clean_val(row.get("procedure")) or "",
+                        "equipment": _clean_val(row.get("equipment")) or "",
+                        "capability": _clean_val(row.get("capability")) or "",
+                        "description": _clean_val(row.get("description")) or "",
+                        "capacity": _clean_val(row.get("capacity")) or "",
+                        "num_doctors": _clean_val(row.get("numberDoctors")) or "",
+                        "unique_id": _clean_val(row.get("unique_id")) or "",
                     },
                 }
                 features.append(feature)
