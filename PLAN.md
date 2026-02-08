@@ -2,7 +2,7 @@
 
 ## Current State
 
-M4 infrastructure is solid: DuckDB backend, tool registry, MCP server, serialization — all functional.
+OASIS infrastructure is solid: DuckDB backend, tool registry, MCP server, serialization — all functional.
 Pydantic extraction models and schema docs are ready in `prompts_and_pydantic_models/`.
 
 **Everything OASIS-specific is unbuilt:**
@@ -21,22 +21,22 @@ The foundation everything else depends on.
 
 **Tasks:**
 1. Initialize the VF Ghana dataset into DuckDB
-   - `m4 init vf-ghana --src "Virtue Foundation Ghana v0.3 - Sheet1.csv"`
+   - `oasis init vf-ghana --src "Virtue Foundation Ghana v0.3 - Sheet1.csv"`
    - Verify table is queryable: `SELECT * FROM vf.facilities LIMIT 5`
-2. Build `src/m4/core/tools/vf_ghana.py` — 5 core tools:
+2. Build `src/oasis/core/tools/vf_ghana.py` — 5 core tools:
    - **`analyze_facility`** — Deep analysis of a single facility, combining structured + free-form data
    - **`find_medical_deserts`** — Identify geographic areas lacking specific specialties or capabilities
    - **`detect_anomalies`** — Flag suspicious/inconsistent facility claims (e.g., claims trauma but no CT scanner)
    - **`route_patient`** — Given medical need + location, find nearest capable facility
    - **`extract_capabilities`** — IDP tool that re-parses free-form text with enhanced extraction
-3. Register all tools in `src/m4/mcp_server.py`
+3. Register all tools in `src/oasis/mcp_server.py`
 4. Write basic tests in `tests/` to verify tools return correct results
 
 **Key references:**
-- Tool protocol: `src/m4/core/tools/base.py`
-- Existing tools for pattern reference: `src/m4/core/tools/tabular.py`
-- Tool registration: `src/m4/core/tools/__init__.py`
-- MCP registration: `src/m4/mcp_server.py`
+- Tool protocol: `src/oasis/core/tools/base.py`
+- Existing tools for pattern reference: `src/oasis/core/tools/tabular.py`
+- Tool registration: `src/oasis/core/tools/__init__.py`
+- MCP registration: `src/oasis/mcp_server.py`
 - Schema docs: `Virtue Foundation Scheme Documentation.md`
 - Pydantic models: `prompts_and_pydantic_models/`
 
@@ -49,7 +49,7 @@ The foundation everything else depends on.
 The visual centerpiece of the demo. This is what the judges remember.
 
 **Tasks:**
-1. Scaffold `src/m4/apps/desert_mapper/` following M4 app protocol:
+1. Scaffold `src/oasis/apps/desert_mapper/` following OASIS app protocol:
    - `__init__.py`
    - `tool.py` — Tool classes (registered in `apps/__init__.py`)
    - `query_builder.py` — SQL generation for map queries
@@ -67,8 +67,8 @@ The visual centerpiece of the demo. This is what the judges remember.
 4. Visual polish: animations, transitions, professional color palette — make it stunning
 
 **Key references:**
-- M4 Apps guide: `docs/M4_APPS.md`
-- App registration: `src/m4/apps/__init__.py`
+- OASIS Apps guide: `docs/OASIS_APPS.md`
+- App registration: `src/oasis/apps/__init__.py`
 
 **Can start immediately** on the UI shell (map, dummy data markers) while waiting for Person 1's tools.
 
@@ -79,7 +79,7 @@ The visual centerpiece of the demo. This is what the judges remember.
 The intelligence layer that makes agent responses smart and domain-aware.
 
 **Tasks:**
-1. Write 3 skills in `src/m4/skills/clinical/`:
+1. Write 3 skills in `src/oasis/skills/clinical/`:
    - **`vf-schema/SKILL.md`** — Teaches the agent about VF Ghana columns, data types, query patterns, known data quirks (nulls, duplicates, JSON arrays)
    - **`idp-extraction/SKILL.md`** — Patterns for parsing free-form medical text into structured facts; reference the Pydantic models in `prompts_and_pydantic_models/`
    - **`medical-desert-analysis/SKILL.md`** — How to identify and characterize healthcare coverage gaps, what constitutes a "desert," severity scoring
@@ -92,8 +92,8 @@ The intelligence layer that makes agent responses smart and domain-aware.
 4. Test with real natural language queries, tune skill quality
 
 **Key references:**
-- Skill format: `src/m4/skills/SKILL_FORMAT.md`
-- Skills index: `src/m4/skills/SKILLS_INDEX.md`
+- Skill format: `src/oasis/skills/SKILL_FORMAT.md`
+- Skills index: `src/oasis/skills/SKILLS_INDEX.md`
 - Pydantic models: `prompts_and_pydantic_models/`
 - VF schema: `Virtue Foundation Scheme Documentation.md`
 

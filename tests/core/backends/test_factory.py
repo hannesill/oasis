@@ -1,4 +1,4 @@
-"""Tests for m4.core.backends factory functions.
+"""Tests for oasis.core.backends factory functions.
 
 Tests cover:
 - get_backend() factory function
@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
-from m4.core.backends import (
+from oasis.core.backends import (
     BackendError,
     BigQueryBackend,
     DuckDBBackend,
@@ -55,21 +55,21 @@ class TestGetBackend:
 
     def test_get_backend_default_is_duckdb(self):
         """Test that default backend is DuckDB when no env var or config set."""
-        env_backup = os.environ.pop("M4_BACKEND", None)
+        env_backup = os.environ.pop("OASIS_BACKEND", None)
         try:
             # Mock config to return no backend (simulating fresh install)
-            with patch("m4.config.load_runtime_config", return_value={}):
+            with patch("oasis.config.load_runtime_config", return_value={}):
                 reset_backend_cache()
                 backend = get_backend()
 
                 assert isinstance(backend, DuckDBBackend)
         finally:
             if env_backup:
-                os.environ["M4_BACKEND"] = env_backup
+                os.environ["OASIS_BACKEND"] = env_backup
 
     def test_get_backend_from_env_var(self):
         """Test getting backend type from environment variable."""
-        with patch.dict(os.environ, {"M4_BACKEND": "bigquery"}):
+        with patch.dict(os.environ, {"OASIS_BACKEND": "bigquery"}):
             reset_backend_cache()
             backend = get_backend()
 

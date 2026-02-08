@@ -11,10 +11,10 @@ import duckdb
 import pandas as pd
 import pytest
 
-from m4.core.backends.duckdb import DuckDBBackend
-from m4.core.datasets import DatasetDefinition, Modality
-from m4.core.exceptions import QueryError, SecurityError
-from m4.core.tools.tabular import (
+from oasis.core.backends.duckdb import DuckDBBackend
+from oasis.core.datasets import DatasetDefinition, Modality
+from oasis.core.exceptions import QueryError, SecurityError
+from oasis.core.tools.tabular import (
     ExecuteQueryInput,
     ExecuteQueryTool,
     GetDatabaseSchemaInput,
@@ -91,7 +91,7 @@ class TestEndToEnd:
         dataset, backend, db_path = integration_env
 
         tool = ExecuteQueryTool()
-        with patch("m4.core.tools.tabular.get_backend", return_value=backend):
+        with patch("oasis.core.tools.tabular.get_backend", return_value=backend):
             result = tool.invoke(
                 dataset,
                 ExecuteQueryInput(
@@ -108,7 +108,7 @@ class TestEndToEnd:
         dataset, backend, db_path = integration_env
 
         tool = GetDatabaseSchemaTool()
-        with patch("m4.core.tools.tabular.get_backend", return_value=backend):
+        with patch("oasis.core.tools.tabular.get_backend", return_value=backend):
             result = tool.invoke(dataset, GetDatabaseSchemaInput())
 
         assert isinstance(result, dict)
@@ -122,7 +122,7 @@ class TestEndToEnd:
         dataset, backend, db_path = integration_env
 
         tool = GetTableInfoTool()
-        with patch("m4.core.tools.tabular.get_backend", return_value=backend):
+        with patch("oasis.core.tools.tabular.get_backend", return_value=backend):
             result = tool.invoke(
                 dataset,
                 GetTableInfoInput(table_name="mimiciv_hosp.patients"),
@@ -147,7 +147,7 @@ class TestEndToEnd:
         dataset, backend, db_path = integration_env
 
         tool = ExecuteQueryTool()
-        with patch("m4.core.tools.tabular.get_backend", return_value=backend):
+        with patch("oasis.core.tools.tabular.get_backend", return_value=backend):
             with pytest.raises(QueryError) as exc_info:
                 tool.invoke(
                     dataset,
@@ -163,7 +163,7 @@ class TestEndToEnd:
         dataset, backend, db_path = integration_env
 
         tool = ExecuteQueryTool()
-        with patch("m4.core.tools.tabular.get_backend", return_value=backend):
+        with patch("oasis.core.tools.tabular.get_backend", return_value=backend):
             with pytest.raises(SecurityError):
                 tool.invoke(
                     dataset,
@@ -181,7 +181,7 @@ class TestEndToEnd:
             JOIN mimiciv_icu.icustays i ON p.subject_id = i.subject_id
             ORDER BY p.subject_id
         """
-        with patch("m4.core.tools.tabular.get_backend", return_value=backend):
+        with patch("oasis.core.tools.tabular.get_backend", return_value=backend):
             result = tool.invoke(dataset, ExecuteQueryInput(sql_query=sql))
 
         assert isinstance(result, pd.DataFrame)
@@ -199,7 +199,7 @@ class TestEndToEnd:
         sql = (
             "SELECT gender, COUNT(*) as cnt FROM mimiciv_hosp.patients GROUP BY gender"
         )
-        with patch("m4.core.tools.tabular.get_backend", return_value=backend):
+        with patch("oasis.core.tools.tabular.get_backend", return_value=backend):
             result = tool.invoke(dataset, ExecuteQueryInput(sql_query=sql))
 
         assert isinstance(result, pd.DataFrame)
@@ -216,7 +216,7 @@ class TestEndToEnd:
 
         tool = ExecuteQueryTool()
         sql = "SELECT * FROM mimiciv_hosp.patients WHERE subject_id = -1"
-        with patch("m4.core.tools.tabular.get_backend", return_value=backend):
+        with patch("oasis.core.tools.tabular.get_backend", return_value=backend):
             result = tool.invoke(dataset, ExecuteQueryInput(sql_query=sql))
 
         assert isinstance(result, pd.DataFrame)

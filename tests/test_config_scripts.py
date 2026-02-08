@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from m4.mcp_client_configs.dynamic_mcp_config import MCPConfigGenerator
+from oasis.mcp_client_configs.dynamic_mcp_config import MCPConfigGenerator
 
 
 class TestMCPConfigGenerator:
@@ -24,10 +24,10 @@ class TestMCPConfigGenerator:
         ):
             config = generator.generate_config()
 
-            # M4_BACKEND is no longer in env - backend comes from config file
-            assert "M4_BACKEND" not in config["mcpServers"]["m4"]["env"]
-            assert "M4_PROJECT_ID" not in config["mcpServers"]["m4"]["env"]
-            assert config["mcpServers"]["m4"]["args"] == ["-m", "m4.mcp_server"]
+            # OASIS_BACKEND is no longer in env - backend comes from config file
+            assert "OASIS_BACKEND" not in config["mcpServers"]["oasis"]["env"]
+            assert "OASIS_PROJECT_ID" not in config["mcpServers"]["oasis"]["env"]
+            assert config["mcpServers"]["oasis"]["args"] == ["-m", "oasis.mcp_server"]
 
     def test_generate_config_bigquery_with_project(self):
         """Test generating BigQuery config with project ID."""
@@ -41,11 +41,11 @@ class TestMCPConfigGenerator:
                 backend="bigquery", project_id="test-project"
             )
 
-            # M4_BACKEND is no longer in env - backend comes from config file
-            assert "M4_BACKEND" not in config["mcpServers"]["m4"]["env"]
-            assert config["mcpServers"]["m4"]["env"]["M4_PROJECT_ID"] == "test-project"
+            # OASIS_BACKEND is no longer in env - backend comes from config file
+            assert "OASIS_BACKEND" not in config["mcpServers"]["oasis"]["env"]
+            assert config["mcpServers"]["oasis"]["env"]["OASIS_PROJECT_ID"] == "test-project"
             assert (
-                config["mcpServers"]["m4"]["env"]["GOOGLE_CLOUD_PROJECT"]
+                config["mcpServers"]["oasis"]["env"]["GOOGLE_CLOUD_PROJECT"]
                 == "test-project"
             )
 
@@ -61,10 +61,10 @@ class TestMCPConfigGenerator:
                 backend="duckdb", db_path="/custom/path/database.duckdb"
             )
 
-            # M4_BACKEND is no longer in env - backend comes from config file
-            assert "M4_BACKEND" not in config["mcpServers"]["m4"]["env"]
+            # OASIS_BACKEND is no longer in env - backend comes from config file
+            assert "OASIS_BACKEND" not in config["mcpServers"]["oasis"]["env"]
             assert (
-                config["mcpServers"]["m4"]["env"]["M4_DB_PATH"]
+                config["mcpServers"]["oasis"]["env"]["OASIS_DB_PATH"]
                 == "/custom/path/database.duckdb"
             )
 
@@ -79,7 +79,7 @@ class TestMCPConfigGenerator:
             config = generator.generate_config(server_name="custom-m4")
 
             assert "custom-m4" in config["mcpServers"]
-            assert "m4" not in config["mcpServers"]
+            assert "oasis" not in config["mcpServers"]
 
     def test_generate_config_additional_env_vars(self):
         """Test generating config with additional environment variables."""
@@ -93,11 +93,11 @@ class TestMCPConfigGenerator:
                 additional_env={"DEBUG": "true", "LOG_LEVEL": "info"}
             )
 
-            env = config["mcpServers"]["m4"]["env"]
+            env = config["mcpServers"]["oasis"]["env"]
             assert env["DEBUG"] == "true"
             assert env["LOG_LEVEL"] == "info"
-            # M4_BACKEND is no longer in env - backend comes from config file
-            assert "M4_BACKEND" not in env
+            # OASIS_BACKEND is no longer in env - backend comes from config file
+            assert "OASIS_BACKEND" not in env
 
     def test_validation_invalid_python_path(self):
         """Test that invalid Python path raises error."""

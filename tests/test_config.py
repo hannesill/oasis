@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from m4.config import (
+from oasis.config import (
     VALID_BACKENDS,
     get_active_backend,
     get_bigquery_project_id,
@@ -11,7 +11,7 @@ from m4.config import (
     set_active_backend,
     set_bigquery_project_id,
 )
-from m4.core.datasets import DatasetRegistry
+from oasis.core.datasets import DatasetRegistry
 
 
 def test_get_dataset_known():
@@ -28,7 +28,7 @@ def test_get_dataset_unknown():
 
 def test_default_paths(tmp_path, monkeypatch):
     # Redirect default dirs to a temp location
-    import m4.config as cfg_mod
+    import oasis.config as cfg_mod
 
     monkeypatch.setattr(cfg_mod, "_DEFAULT_DATABASES_DIR", tmp_path / "dbs")
     monkeypatch.setattr(cfg_mod, "_DEFAULT_PARQUET_DIR", tmp_path / "parquet")
@@ -42,7 +42,7 @@ def test_default_paths(tmp_path, monkeypatch):
 
 
 def test_raw_path_includes_dataset_name(tmp_path, monkeypatch):
-    import m4.config as cfg_mod
+    import oasis.config as cfg_mod
 
     monkeypatch.setattr(cfg_mod, "_DEFAULT_PARQUET_DIR", tmp_path / "parquet")
     raw_path = get_dataset_parquet_root("mimic-iv-demo")
@@ -50,7 +50,7 @@ def test_raw_path_includes_dataset_name(tmp_path, monkeypatch):
 
 
 def test_find_project_root_search(tmp_path, monkeypatch):
-    from m4.config import _find_project_root_from_cwd
+    from oasis.config import _find_project_root_from_cwd
 
     # Case 1: No data dir -> returns cwd
     with monkeypatch.context() as m:
@@ -58,7 +58,7 @@ def test_find_project_root_search(tmp_path, monkeypatch):
         assert _find_project_root_from_cwd() == tmp_path
 
     # Case 2: Data dir exists but empty (invalid) -> returns cwd
-    data_dir = tmp_path / "m4_data"
+    data_dir = tmp_path / "oasis_data"
     data_dir.mkdir()
     with monkeypatch.context() as m:
         m.chdir(tmp_path)
@@ -86,9 +86,9 @@ def test_find_project_root_search(tmp_path, monkeypatch):
 @pytest.fixture
 def isolated_config(tmp_path, monkeypatch):
     """Fixture that isolates config file access to a temp directory."""
-    import m4.config as cfg_mod
+    import oasis.config as cfg_mod
 
-    data_dir = tmp_path / "m4_data"
+    data_dir = tmp_path / "oasis_data"
     data_dir.mkdir()
 
     monkeypatch.setattr(cfg_mod, "_PROJECT_DATA_DIR", data_dir)
@@ -106,34 +106,34 @@ class TestGetActiveBackend:
     def test_default_is_duckdb(self, isolated_config, monkeypatch):
         """Default backend is duckdb when nothing is configured."""
         # Clear any env var
-        monkeypatch.delenv("M4_BACKEND", raising=False)
+        monkeypatch.delenv("OASIS_BACKEND", raising=False)
 
         assert get_active_backend() == "duckdb"
 
     def test_env_var_takes_priority(self, isolated_config, monkeypatch):
-        """M4_BACKEND env var takes priority over config file."""
+        """OASIS_BACKEND env var takes priority over config file."""
         isolated_config.write_text('{"backend": "duckdb"}')
-        monkeypatch.setenv("M4_BACKEND", "bigquery")
+        monkeypatch.setenv("OASIS_BACKEND", "bigquery")
 
         assert get_active_backend() == "bigquery"
 
     def test_env_var_case_insensitive(self, isolated_config, monkeypatch):
-        """M4_BACKEND env var is case-insensitive."""
-        monkeypatch.setenv("M4_BACKEND", "BIGQUERY")
+        """OASIS_BACKEND env var is case-insensitive."""
+        monkeypatch.setenv("OASIS_BACKEND", "BIGQUERY")
 
         assert get_active_backend() == "bigquery"
 
     def test_config_file_used_when_no_env(self, isolated_config, monkeypatch):
         """Config file setting is used when no env var is set."""
         isolated_config.write_text('{"backend": "bigquery"}')
-        monkeypatch.delenv("M4_BACKEND", raising=False)
+        monkeypatch.delenv("OASIS_BACKEND", raising=False)
 
         assert get_active_backend() == "bigquery"
 
     def test_config_file_case_insensitive(self, isolated_config, monkeypatch):
         """Config file backend setting is case-insensitive."""
         isolated_config.write_text('{"backend": "DUCKDB"}')
-        monkeypatch.delenv("M4_BACKEND", raising=False)
+        monkeypatch.delenv("OASIS_BACKEND", raising=False)
 
         assert get_active_backend() == "duckdb"
 
@@ -192,21 +192,21 @@ class TestBigQueryProjectId:
 
     def test_default_is_none(self, isolated_config, monkeypatch):
         """Default project ID is None when nothing is configured."""
-        monkeypatch.delenv("M4_PROJECT_ID", raising=False)
+        monkeypatch.delenv("OASIS_PROJECT_ID", raising=False)
 
         assert get_bigquery_project_id() is None
 
     def test_env_var_takes_priority(self, isolated_config, monkeypatch):
-        """M4_PROJECT_ID env var takes priority over config file."""
+        """OASIS_PROJECT_ID env var takes priority over config file."""
         isolated_config.write_text('{"bigquery_project_id": "from-config"}')
-        monkeypatch.setenv("M4_PROJECT_ID", "from-env")
+        monkeypatch.setenv("OASIS_PROJECT_ID", "from-env")
 
         assert get_bigquery_project_id() == "from-env"
 
     def test_config_file_used_when_no_env(self, isolated_config, monkeypatch):
         """Config file setting is used when no env var is set."""
         isolated_config.write_text('{"bigquery_project_id": "my-project"}')
-        monkeypatch.delenv("M4_PROJECT_ID", raising=False)
+        monkeypatch.delenv("OASIS_PROJECT_ID", raising=False)
 
         assert get_bigquery_project_id() == "my-project"
 
@@ -214,7 +214,7 @@ class TestBigQueryProjectId:
         """Can set project ID via set_bigquery_project_id."""
         import json
 
-        monkeypatch.delenv("M4_PROJECT_ID", raising=False)
+        monkeypatch.delenv("OASIS_PROJECT_ID", raising=False)
 
         set_bigquery_project_id("new-project")
 
@@ -224,7 +224,7 @@ class TestBigQueryProjectId:
 
     def test_clear_project_id(self, isolated_config, monkeypatch):
         """Can clear project ID by setting None."""
-        monkeypatch.delenv("M4_PROJECT_ID", raising=False)
+        monkeypatch.delenv("OASIS_PROJECT_ID", raising=False)
 
         set_bigquery_project_id("some-project")
         assert get_bigquery_project_id() == "some-project"

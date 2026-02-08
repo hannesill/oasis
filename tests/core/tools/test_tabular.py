@@ -13,10 +13,10 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from m4.core.backends.base import QueryResult
-from m4.core.datasets import DatasetDefinition, Modality
-from m4.core.exceptions import QueryError, SecurityError
-from m4.core.tools.tabular import (
+from oasis.core.backends.base import QueryResult
+from oasis.core.datasets import DatasetDefinition, Modality
+from oasis.core.exceptions import QueryError, SecurityError
+from oasis.core.tools.tabular import (
     ExecuteQueryInput,
     ExecuteQueryTool,
     GetDatabaseSchemaInput,
@@ -55,7 +55,7 @@ class TestGetDatabaseSchemaTool:
             "mimiciv_icu.icustays",
         ]
 
-        with patch("m4.core.tools.tabular.get_backend", return_value=mock_backend):
+        with patch("oasis.core.tools.tabular.get_backend", return_value=mock_backend):
             tool = GetDatabaseSchemaTool()
             result = tool.invoke(mock_dataset, GetDatabaseSchemaInput())
 
@@ -71,7 +71,7 @@ class TestGetDatabaseSchemaTool:
         """Test handling when no tables are found."""
         mock_backend.get_table_list.return_value = []
 
-        with patch("m4.core.tools.tabular.get_backend", return_value=mock_backend):
+        with patch("oasis.core.tools.tabular.get_backend", return_value=mock_backend):
             tool = GetDatabaseSchemaTool()
             result = tool.invoke(mock_dataset, GetDatabaseSchemaInput())
 
@@ -81,7 +81,7 @@ class TestGetDatabaseSchemaTool:
         """Test error handling when backend raises exception."""
         mock_backend.get_table_list.side_effect = Exception("Connection failed")
 
-        with patch("m4.core.tools.tabular.get_backend", return_value=mock_backend):
+        with patch("oasis.core.tools.tabular.get_backend", return_value=mock_backend):
             tool = GetDatabaseSchemaTool()
 
             # Backend exceptions propagate through
@@ -128,7 +128,7 @@ class TestGetTableInfoTool:
             row_count=2,
         )
 
-        with patch("m4.core.tools.tabular.get_backend", return_value=mock_backend):
+        with patch("oasis.core.tools.tabular.get_backend", return_value=mock_backend):
             tool = GetTableInfoTool()
             params = GetTableInfoInput(table_name="patients", show_sample=True)
             result = tool.invoke(mock_dataset, params)
@@ -147,7 +147,7 @@ class TestGetTableInfoTool:
             row_count=1,
         )
 
-        with patch("m4.core.tools.tabular.get_backend", return_value=mock_backend):
+        with patch("oasis.core.tools.tabular.get_backend", return_value=mock_backend):
             tool = GetTableInfoTool()
             params = GetTableInfoInput(table_name="patients", show_sample=False)
             result = tool.invoke(mock_dataset, params)
@@ -163,7 +163,7 @@ class TestGetTableInfoTool:
             error="Table not found",
         )
 
-        with patch("m4.core.tools.tabular.get_backend", return_value=mock_backend):
+        with patch("oasis.core.tools.tabular.get_backend", return_value=mock_backend):
             tool = GetTableInfoTool()
             params = GetTableInfoInput(table_name="nonexistent")
 
@@ -184,7 +184,7 @@ class TestExecuteQueryTool:
             row_count=2,
         )
 
-        with patch("m4.core.tools.tabular.get_backend", return_value=mock_backend):
+        with patch("oasis.core.tools.tabular.get_backend", return_value=mock_backend):
             tool = ExecuteQueryTool()
             params = ExecuteQueryInput(sql_query="SELECT * FROM patients LIMIT 10")
             result = tool.invoke(mock_dataset, params)
@@ -195,7 +195,7 @@ class TestExecuteQueryTool:
 
     def test_invoke_blocks_unsafe_query(self, mock_dataset, mock_backend):
         """Test that unsafe queries raise SecurityError."""
-        with patch("m4.core.tools.tabular.get_backend", return_value=mock_backend):
+        with patch("oasis.core.tools.tabular.get_backend", return_value=mock_backend):
             tool = ExecuteQueryTool()
             params = ExecuteQueryInput(sql_query="DROP TABLE patients")
 
@@ -206,7 +206,7 @@ class TestExecuteQueryTool:
 
     def test_invoke_blocks_injection_pattern(self, mock_dataset, mock_backend):
         """Test that SQL injection patterns raise SecurityError."""
-        with patch("m4.core.tools.tabular.get_backend", return_value=mock_backend):
+        with patch("oasis.core.tools.tabular.get_backend", return_value=mock_backend):
             tool = ExecuteQueryTool()
             params = ExecuteQueryInput(sql_query="SELECT * FROM patients WHERE 1=1")
 
@@ -222,7 +222,7 @@ class TestExecuteQueryTool:
             error="Column not found: age",
         )
 
-        with patch("m4.core.tools.tabular.get_backend", return_value=mock_backend):
+        with patch("oasis.core.tools.tabular.get_backend", return_value=mock_backend):
             tool = ExecuteQueryTool()
             params = ExecuteQueryInput(sql_query="SELECT age FROM patients")
 

@@ -58,17 +58,10 @@ junit.xml
 *.swp
 
 # Local database files
-*.db
-*.db-journal*
-mimic*.db
-*.duckdb
-*.duckdb.wal
-*.duckdb.tmp
-mimic*.duckdb
+# alright for hackathon
 
 # Configuration files
-config.json
-*config*.json
+# alright for hackathon
 
 # Operating System specific files
 .DS_Store

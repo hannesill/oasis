@@ -1,1 +1,1 @@
-"""Tests for m4.core.tools module."""
+"""Tests for oasis.core.tools module."""

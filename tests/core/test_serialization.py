@@ -1,4 +1,4 @@
-"""Tests for m4.core.serialization module.
+"""Tests for oasis.core.serialization module.
 
 This module is the sole serialization layer between tool return values
 and MCP string output. A bug here silently corrupts all user-visible
@@ -15,7 +15,7 @@ Tests cover:
 import pandas as pd
 import pytest
 
-from m4.core.serialization import serialize_for_mcp
+from oasis.core.serialization import serialize_for_mcp
 
 
 class TestSerializeForMCPDispatch:

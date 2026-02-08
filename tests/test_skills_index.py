@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 def _skills_dir() -> Path:
-    from m4.skills.installer import get_skills_source
+    from oasis.skills.installer import get_skills_source
 
     return get_skills_source()
 
@@ -55,7 +55,7 @@ def test_skills_index_matches_skills_on_disk():
 
 
 def test_parse_skill_metadata_returns_correct_fields():
-    from m4.skills.installer import _parse_skill_metadata
+    from oasis.skills.installer import _parse_skill_metadata
 
     skills_dir = _skills_dir()
     sofa_dir = skills_dir / "clinical" / "sofa-score"
@@ -71,14 +71,14 @@ def test_parse_skill_metadata_returns_correct_fields():
 
 
 def test_parse_skill_metadata_returns_none_for_missing_dir(tmp_path: Path):
-    from m4.skills.installer import _parse_skill_metadata
+    from oasis.skills.installer import _parse_skill_metadata
 
     result = _parse_skill_metadata(tmp_path / "nonexistent")
     assert result is None
 
 
 def test_parse_skill_metadata_returns_none_for_no_frontmatter(tmp_path: Path):
-    from m4.skills.installer import _parse_skill_metadata
+    from oasis.skills.installer import _parse_skill_metadata
 
     skill_dir = tmp_path / "bad-skill"
     skill_dir.mkdir()
@@ -90,7 +90,7 @@ def test_parse_skill_metadata_returns_none_for_no_frontmatter(tmp_path: Path):
 
 
 def test_get_available_skills_returns_all():
-    from m4.skills.installer import get_available_skills
+    from oasis.skills.installer import get_available_skills
 
     all_skills = get_available_skills()
     disk = _skills_on_disk()
@@ -99,7 +99,7 @@ def test_get_available_skills_returns_all():
 
 
 def test_get_available_skills_filter_by_category():
-    from m4.skills.installer import get_available_skills
+    from oasis.skills.installer import get_available_skills
 
     clinical = get_available_skills(category=["clinical"])
     assert len(clinical) > 0
@@ -115,7 +115,7 @@ def test_get_available_skills_filter_by_category():
 
 
 def test_get_available_skills_filter_by_tier():
-    from m4.skills.installer import get_available_skills
+    from oasis.skills.installer import get_available_skills
 
     validated = get_available_skills(tier=["validated"])
     assert len(validated) > 0
@@ -123,7 +123,7 @@ def test_get_available_skills_filter_by_tier():
 
 
 def test_get_available_skills_filter_by_name():
-    from m4.skills.installer import get_available_skills
+    from oasis.skills.installer import get_available_skills
 
     result = get_available_skills(names=["sofa-score"])
     assert len(result) == 1
@@ -131,7 +131,7 @@ def test_get_available_skills_filter_by_name():
 
 
 def test_get_available_skills_combined_filters():
-    from m4.skills.installer import get_available_skills
+    from oasis.skills.installer import get_available_skills
 
     result = get_available_skills(tier=["validated"], category=["clinical"])
     assert len(result) > 0
@@ -145,14 +145,14 @@ def test_get_available_skills_combined_filters():
 
 
 def test_get_available_skills_invalid_name_returns_empty():
-    from m4.skills.installer import get_available_skills
+    from oasis.skills.installer import get_available_skills
 
     result = get_available_skills(names=["nonexistent-skill-xyz"])
     assert result == []
 
 
 def test_get_available_skills_results_are_sorted():
-    from m4.skills.installer import get_available_skills
+    from oasis.skills.installer import get_available_skills
 
     all_skills = get_available_skills()
     names = [s.name for s in all_skills]

@@ -16,7 +16,7 @@ Tests cover:
 
 import pandas as pd
 
-from m4.mcp_server import (
+from oasis.mcp_server import (
     _serialize_datasets_result,
     _serialize_get_note_result,
     _serialize_list_patient_notes_result,
@@ -182,7 +182,7 @@ class TestSerializeDatasetsResult:
             }
         )
         assert "10/63" in result
-        assert "m4 init-derived" in result
+        assert "oasis init-derived" in result
 
     def test_bigquery_backend_label(self):
         """BigQuery backend shows 'cloud (BigQuery)' label."""

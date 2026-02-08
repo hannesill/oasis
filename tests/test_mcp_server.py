@@ -10,9 +10,9 @@ from unittest.mock import Mock, patch
 import pytest
 from fastmcp import Client
 
-from m4.core.datasets import DatasetDefinition, Modality
-from m4.core.tools import init_tools
-from m4.mcp_server import mcp
+from oasis.core.datasets import DatasetDefinition, Modality
+from oasis.core.tools import init_tools
+from oasis.mcp_server import mcp
 
 
 @pytest.fixture(autouse=True)
@@ -37,7 +37,7 @@ class TestMCPServerSetup:
     def test_server_instance_exists(self):
         """Test that the FastMCP server instance exists."""
         assert mcp is not None
-        assert mcp.name == "m4"
+        assert mcp.name == "oasis"
 
 
 class TestMCPTools:
@@ -98,7 +98,7 @@ class TestMCPTools:
     @pytest.mark.asyncio
     async def test_tools_via_client(self, test_db):
         """Test MCP tools through the FastMCP client."""
-        from m4.core.backends import reset_backend_cache
+        from oasis.core.backends import reset_backend_cache
 
         # Reset backend cache to ensure clean state
         reset_backend_cache()
@@ -112,17 +112,17 @@ class TestMCPTools:
         with patch.dict(
             os.environ,
             {
-                "M4_BACKEND": "duckdb",
-                "M4_DB_PATH": test_db,
-                "M4_OAUTH2_ENABLED": "false",
+                "OASIS_BACKEND": "duckdb",
+                "OASIS_DB_PATH": test_db,
+                "OASIS_OAUTH2_ENABLED": "false",
             },
             clear=True,
         ):
             with patch(
-                "m4.mcp_server.DatasetRegistry.get_active", return_value=mock_ds
+                "oasis.mcp_server.DatasetRegistry.get_active", return_value=mock_ds
             ):
-                with patch("m4.core.tools.tabular.get_backend") as mock_get_backend:
-                    from m4.core.backends.duckdb import DuckDBBackend
+                with patch("oasis.core.tools.tabular.get_backend") as mock_get_backend:
+                    from oasis.core.backends.duckdb import DuckDBBackend
 
                     # Use real DuckDB backend with test database
                     mock_get_backend.return_value = DuckDBBackend(
@@ -152,16 +152,16 @@ class TestMCPTools:
     @pytest.mark.asyncio
     async def test_security_checks(self, test_db):
         """Test SQL injection protection."""
-        from m4.core.backends import reset_backend_cache
+        from oasis.core.backends import reset_backend_cache
 
         reset_backend_cache()
 
         with patch.dict(
             os.environ,
             {
-                "M4_BACKEND": "duckdb",
-                "M4_DB_PATH": test_db,
-                "M4_OAUTH2_ENABLED": "false",
+                "OASIS_BACKEND": "duckdb",
+                "OASIS_DB_PATH": test_db,
+                "OASIS_OAUTH2_ENABLED": "false",
             },
             clear=True,
         ):
@@ -187,8 +187,8 @@ class TestMCPTools:
     @pytest.mark.asyncio
     async def test_invalid_sql(self, test_db):
         """Test handling of invalid SQL."""
-        from m4.core.backends import reset_backend_cache
-        from m4.core.backends.duckdb import DuckDBBackend
+        from oasis.core.backends import reset_backend_cache
+        from oasis.core.backends.duckdb import DuckDBBackend
 
         reset_backend_cache()
 
@@ -200,16 +200,16 @@ class TestMCPTools:
         with patch.dict(
             os.environ,
             {
-                "M4_BACKEND": "duckdb",
-                "M4_DB_PATH": test_db,
-                "M4_OAUTH2_ENABLED": "false",
+                "OASIS_BACKEND": "duckdb",
+                "OASIS_DB_PATH": test_db,
+                "OASIS_OAUTH2_ENABLED": "false",
             },
             clear=True,
         ):
             with patch(
-                "m4.mcp_server.DatasetRegistry.get_active", return_value=mock_ds
+                "oasis.mcp_server.DatasetRegistry.get_active", return_value=mock_ds
             ):
-                with patch("m4.core.tools.tabular.get_backend") as mock_get_backend:
+                with patch("oasis.core.tools.tabular.get_backend") as mock_get_backend:
                     mock_get_backend.return_value = DuckDBBackend(
                         db_path_override=test_db
                     )
@@ -227,8 +227,8 @@ class TestMCPTools:
     @pytest.mark.asyncio
     async def test_empty_results(self, test_db):
         """Test handling of queries with no results."""
-        from m4.core.backends import reset_backend_cache
-        from m4.core.backends.duckdb import DuckDBBackend
+        from oasis.core.backends import reset_backend_cache
+        from oasis.core.backends.duckdb import DuckDBBackend
 
         reset_backend_cache()
 
@@ -240,16 +240,16 @@ class TestMCPTools:
         with patch.dict(
             os.environ,
             {
-                "M4_BACKEND": "duckdb",
-                "M4_DB_PATH": test_db,
-                "M4_OAUTH2_ENABLED": "false",
+                "OASIS_BACKEND": "duckdb",
+                "OASIS_DB_PATH": test_db,
+                "OASIS_OAUTH2_ENABLED": "false",
             },
             clear=True,
         ):
             with patch(
-                "m4.mcp_server.DatasetRegistry.get_active", return_value=mock_ds
+                "oasis.mcp_server.DatasetRegistry.get_active", return_value=mock_ds
             ):
-                with patch("m4.core.tools.tabular.get_backend") as mock_get_backend:
+                with patch("oasis.core.tools.tabular.get_backend") as mock_get_backend:
                     mock_get_backend.return_value = DuckDBBackend(
                         db_path_override=test_db
                     )
@@ -267,19 +267,19 @@ class TestMCPTools:
     @pytest.mark.asyncio
     async def test_oauth2_authentication_required(self, test_db):
         """Test that OAuth2 authentication is required when enabled."""
-        from m4.auth import init_oauth2
-        from m4.core.backends import reset_backend_cache
+        from oasis.auth import init_oauth2
+        from oasis.core.backends import reset_backend_cache
 
         reset_backend_cache()
 
         with patch.dict(
             os.environ,
             {
-                "M4_BACKEND": "duckdb",
-                "M4_DB_PATH": test_db,
-                "M4_OAUTH2_ENABLED": "true",
-                "M4_OAUTH2_ISSUER_URL": "https://auth.example.com",
-                "M4_OAUTH2_AUDIENCE": "m4-api",
+                "OASIS_BACKEND": "duckdb",
+                "OASIS_DB_PATH": test_db,
+                "OASIS_OAUTH2_ENABLED": "true",
+                "OASIS_OAUTH2_ISSUER_URL": "https://auth.example.com",
+                "OASIS_OAUTH2_AUDIENCE": "oasis-api",
             },
             clear=True,
         ):
@@ -296,7 +296,7 @@ class TestMCPTools:
                 assert "Missing OAuth2 access token" in result_text
 
         # Reset OAuth2 to disabled after test
-        with patch.dict(os.environ, {"M4_OAUTH2_ENABLED": "false"}, clear=True):
+        with patch.dict(os.environ, {"OASIS_OAUTH2_ENABLED": "false"}, clear=True):
             init_oauth2()
 
 
@@ -309,7 +309,7 @@ class TestBigQueryIntegration:
     @pytest.mark.asyncio
     async def test_bigquery_tools(self):
         """Test BigQuery tools functionality with mocks."""
-        from m4.core.backends import reset_backend_cache
+        from oasis.core.backends import reset_backend_cache
 
         reset_backend_cache()
 
@@ -324,23 +324,23 @@ class TestBigQueryIntegration:
         with patch.dict(
             os.environ,
             {
-                "M4_BACKEND": "bigquery",
-                "M4_PROJECT_ID": "test-project",
-                "M4_OAUTH2_ENABLED": "false",
+                "OASIS_BACKEND": "bigquery",
+                "OASIS_PROJECT_ID": "test-project",
+                "OASIS_OAUTH2_ENABLED": "false",
             },
             clear=True,
         ):
             with patch(
-                "m4.mcp_server.DatasetRegistry.get_active", return_value=mock_ds
+                "oasis.mcp_server.DatasetRegistry.get_active", return_value=mock_ds
             ):
-                with patch("m4.core.tools.tabular.get_backend") as mock_get_backend:
+                with patch("oasis.core.tools.tabular.get_backend") as mock_get_backend:
                     # Mock the backend
                     mock_backend = Mock()
                     mock_backend.name = "bigquery"
 
                     import pandas as pd
 
-                    from m4.core.backends.base import QueryResult
+                    from oasis.core.backends.base import QueryResult
 
                     # Create a mock DataFrame for the result
                     mock_df = pd.DataFrame({"result": ["Mock BigQuery result"]})
@@ -380,7 +380,7 @@ class TestModalityChecking:
 
         This verifies no backend execution is attempted.
         """
-        from m4.core.backends import reset_backend_cache
+        from oasis.core.backends import reset_backend_cache
 
         reset_backend_cache()
 
@@ -392,14 +392,14 @@ class TestModalityChecking:
 
         with patch.dict(
             os.environ,
-            {"M4_OAUTH2_ENABLED": "false"},
+            {"OASIS_OAUTH2_ENABLED": "false"},
             clear=True,
         ):
             with patch(
-                "m4.mcp_server.DatasetRegistry.get_active", return_value=notes_only_ds
+                "oasis.mcp_server.DatasetRegistry.get_active", return_value=notes_only_ds
             ):
                 # Mock backend that should NOT be called
-                with patch("m4.core.tools.tabular.get_backend") as mock_backend:
+                with patch("oasis.core.tools.tabular.get_backend") as mock_backend:
                     async with Client(mcp) as client:
                         # Call execute_query which requires TABULAR modality
                         result = await client.call_tool(
@@ -425,8 +425,8 @@ class TestModalityChecking:
         """Test that compatible tools execute against the backend."""
         import duckdb
 
-        from m4.core.backends import reset_backend_cache
-        from m4.core.backends.duckdb import DuckDBBackend
+        from oasis.core.backends import reset_backend_cache
+        from oasis.core.backends.duckdb import DuckDBBackend
 
         reset_backend_cache()
 
@@ -448,13 +448,13 @@ class TestModalityChecking:
 
         with patch.dict(
             os.environ,
-            {"M4_OAUTH2_ENABLED": "false"},
+            {"OASIS_OAUTH2_ENABLED": "false"},
             clear=True,
         ):
             with patch(
-                "m4.mcp_server.DatasetRegistry.get_active", return_value=tabular_ds
+                "oasis.mcp_server.DatasetRegistry.get_active", return_value=tabular_ds
             ):
-                with patch("m4.core.tools.tabular.get_backend") as mock_get_backend:
+                with patch("oasis.core.tools.tabular.get_backend") as mock_get_backend:
                     mock_get_backend.return_value = DuckDBBackend(
                         db_path_override=str(db_path)
                     )
@@ -475,7 +475,7 @@ class TestModalityChecking:
     @pytest.mark.asyncio
     async def test_set_dataset_returns_supported_tools_snapshot(self):
         """Test that set_dataset includes supported tools in response."""
-        from m4.core.backends import reset_backend_cache
+        from oasis.core.backends import reset_backend_cache
 
         reset_backend_cache()
 
@@ -485,28 +485,28 @@ class TestModalityChecking:
             modalities={Modality.TABULAR},
         )
 
-        with patch.dict(os.environ, {"M4_OAUTH2_ENABLED": "false"}, clear=True):
+        with patch.dict(os.environ, {"OASIS_OAUTH2_ENABLED": "false"}, clear=True):
             with patch(
-                "m4.core.tools.management.detect_available_local_datasets",
+                "oasis.core.tools.management.detect_available_local_datasets",
                 return_value={
                     "test-dataset": {"parquet_present": True, "db_present": True}
                 },
             ):
-                with patch("m4.core.tools.management.set_active_dataset"):
+                with patch("oasis.core.tools.management.set_active_dataset"):
                     with patch(
-                        "m4.config.get_active_dataset",
+                        "oasis.config.get_active_dataset",
                         return_value="test-dataset",
                     ):
                         with patch(
-                            "m4.core.tools.management.DatasetRegistry.get",
+                            "oasis.core.tools.management.DatasetRegistry.get",
                             return_value=target_ds,
                         ):
                             with patch(
-                                "m4.mcp_server.DatasetRegistry.get",
+                                "oasis.mcp_server.DatasetRegistry.get",
                                 return_value=target_ds,
                             ):
                                 with patch(
-                                    "m4.core.tools.management.get_active_backend",
+                                    "oasis.core.tools.management.get_active_backend",
                                     return_value="duckdb",
                                 ):
                                     async with Client(mcp) as client:
@@ -528,7 +528,7 @@ class TestModalityChecking:
     @pytest.mark.asyncio
     async def test_set_dataset_invalid_returns_error_without_snapshot(self):
         """Test that set_dataset with invalid dataset returns error without snapshot."""
-        from m4.core.backends import reset_backend_cache
+        from oasis.core.backends import reset_backend_cache
 
         reset_backend_cache()
 
@@ -538,19 +538,19 @@ class TestModalityChecking:
             modalities={Modality.TABULAR},
         )
 
-        with patch.dict(os.environ, {"M4_OAUTH2_ENABLED": "false"}, clear=True):
+        with patch.dict(os.environ, {"OASIS_OAUTH2_ENABLED": "false"}, clear=True):
             with patch(
-                "m4.core.tools.management.detect_available_local_datasets",
+                "oasis.core.tools.management.detect_available_local_datasets",
                 return_value={
                     "mimic-iv-demo": {"parquet_present": True, "db_present": True}
                 },
             ):
                 with patch(
-                    "m4.mcp_server.DatasetRegistry.get_active",
+                    "oasis.mcp_server.DatasetRegistry.get_active",
                     return_value=mock_active_ds,
                 ):
                     with patch(
-                        "m4.mcp_server.DatasetRegistry.get", return_value=None
+                        "oasis.mcp_server.DatasetRegistry.get", return_value=None
                     ):  # Unknown dataset for snapshot lookup
                         async with Client(mcp) as client:
                             result = await client.call_tool(
@@ -564,7 +564,7 @@ class TestModalityChecking:
     @pytest.mark.asyncio
     async def test_tool_incompatibility_with_notes_only(self):
         """Test that tabular tools are incompatible with notes-only dataset."""
-        from m4.core.backends import reset_backend_cache
+        from oasis.core.backends import reset_backend_cache
 
         reset_backend_cache()
 
@@ -574,9 +574,9 @@ class TestModalityChecking:
             modalities={Modality.NOTES},  # Only notes data
         )
 
-        with patch.dict(os.environ, {"M4_OAUTH2_ENABLED": "false"}, clear=True):
+        with patch.dict(os.environ, {"OASIS_OAUTH2_ENABLED": "false"}, clear=True):
             with patch(
-                "m4.mcp_server.DatasetRegistry.get_active", return_value=notes_ds
+                "oasis.mcp_server.DatasetRegistry.get_active", return_value=notes_ds
             ):
                 async with Client(mcp) as client:
                     # Test execute_query (requires TABULAR modality)
@@ -591,7 +591,7 @@ class TestModalityChecking:
 
     def test_check_tool_compatibility_helper(self):
         """Test the ToolSelector.check_compatibility method directly."""
-        from m4.core.tools import ToolSelector
+        from oasis.core.tools import ToolSelector
 
         selector = ToolSelector()
 
@@ -626,7 +626,7 @@ class TestModalityChecking:
 
     def test_supported_tools_snapshot_helper(self):
         """Test the ToolSelector.get_supported_tools_snapshot method."""
-        from m4.core.tools import ToolSelector
+        from oasis.core.tools import ToolSelector
 
         selector = ToolSelector()
 
@@ -651,7 +651,7 @@ class TestModalityChecking:
 
     def test_supported_tools_snapshot_empty_modalities(self):
         """Test snapshot for dataset with no modalities."""
-        from m4.core.tools import ToolSelector
+        from oasis.core.tools import ToolSelector
 
         selector = ToolSelector()
 
@@ -674,11 +674,11 @@ class TestNoActiveDatasetError:
     async def test_tools_return_error_when_no_active_dataset(self):
         """All data tools should return an error string, not crash,
         when DatasetRegistry.get_active() raises DatasetError."""
-        from m4.core.exceptions import DatasetError
+        from oasis.core.exceptions import DatasetError
 
-        with patch.dict(os.environ, {"M4_OAUTH2_ENABLED": "false"}, clear=True):
+        with patch.dict(os.environ, {"OASIS_OAUTH2_ENABLED": "false"}, clear=True):
             with patch(
-                "m4.mcp_server.DatasetRegistry.get_active",
+                "oasis.mcp_server.DatasetRegistry.get_active",
                 side_effect=DatasetError("No active dataset configured."),
             ):
                 async with Client(mcp) as client:
@@ -724,9 +724,9 @@ class TestMCPNotesTools:
     @pytest.mark.asyncio
     async def test_search_notes_incompatible_dataset(self, tabular_only_dataset):
         """search_notes should return compatibility error on TABULAR-only dataset."""
-        with patch.dict(os.environ, {"M4_OAUTH2_ENABLED": "false"}, clear=True):
+        with patch.dict(os.environ, {"OASIS_OAUTH2_ENABLED": "false"}, clear=True):
             with patch(
-                "m4.mcp_server.DatasetRegistry.get_active",
+                "oasis.mcp_server.DatasetRegistry.get_active",
                 return_value=tabular_only_dataset,
             ):
                 async with Client(mcp) as client:
@@ -739,9 +739,9 @@ class TestMCPNotesTools:
     @pytest.mark.asyncio
     async def test_get_note_incompatible_dataset(self, tabular_only_dataset):
         """get_note should return compatibility error on TABULAR-only dataset."""
-        with patch.dict(os.environ, {"M4_OAUTH2_ENABLED": "false"}, clear=True):
+        with patch.dict(os.environ, {"OASIS_OAUTH2_ENABLED": "false"}, clear=True):
             with patch(
-                "m4.mcp_server.DatasetRegistry.get_active",
+                "oasis.mcp_server.DatasetRegistry.get_active",
                 return_value=tabular_only_dataset,
             ):
                 async with Client(mcp) as client:
@@ -754,9 +754,9 @@ class TestMCPNotesTools:
     @pytest.mark.asyncio
     async def test_list_patient_notes_incompatible_dataset(self, tabular_only_dataset):
         """list_patient_notes should return compatibility error on TABULAR-only dataset."""
-        with patch.dict(os.environ, {"M4_OAUTH2_ENABLED": "false"}, clear=True):
+        with patch.dict(os.environ, {"OASIS_OAUTH2_ENABLED": "false"}, clear=True):
             with patch(
-                "m4.mcp_server.DatasetRegistry.get_active",
+                "oasis.mcp_server.DatasetRegistry.get_active",
                 return_value=tabular_only_dataset,
             ):
                 async with Client(mcp) as client:
@@ -773,11 +773,11 @@ class TestMCPNotesTools:
     @pytest.mark.asyncio
     async def test_search_notes_no_active_dataset(self):
         """search_notes should return error when no dataset is active."""
-        from m4.core.exceptions import DatasetError
+        from oasis.core.exceptions import DatasetError
 
-        with patch.dict(os.environ, {"M4_OAUTH2_ENABLED": "false"}, clear=True):
+        with patch.dict(os.environ, {"OASIS_OAUTH2_ENABLED": "false"}, clear=True):
             with patch(
-                "m4.mcp_server.DatasetRegistry.get_active",
+                "oasis.mcp_server.DatasetRegistry.get_active",
                 side_effect=DatasetError("No active dataset"),
             ):
                 async with Client(mcp) as client:
@@ -790,11 +790,11 @@ class TestMCPNotesTools:
     @pytest.mark.asyncio
     async def test_get_note_no_active_dataset(self):
         """get_note should return error when no dataset is active."""
-        from m4.core.exceptions import DatasetError
+        from oasis.core.exceptions import DatasetError
 
-        with patch.dict(os.environ, {"M4_OAUTH2_ENABLED": "false"}, clear=True):
+        with patch.dict(os.environ, {"OASIS_OAUTH2_ENABLED": "false"}, clear=True):
             with patch(
-                "m4.mcp_server.DatasetRegistry.get_active",
+                "oasis.mcp_server.DatasetRegistry.get_active",
                 side_effect=DatasetError("No active dataset"),
             ):
                 async with Client(mcp) as client:
@@ -805,11 +805,11 @@ class TestMCPNotesTools:
     @pytest.mark.asyncio
     async def test_list_patient_notes_no_active_dataset(self):
         """list_patient_notes should return error when no dataset is active."""
-        from m4.core.exceptions import DatasetError
+        from oasis.core.exceptions import DatasetError
 
-        with patch.dict(os.environ, {"M4_OAUTH2_ENABLED": "false"}, clear=True):
+        with patch.dict(os.environ, {"OASIS_OAUTH2_ENABLED": "false"}, clear=True):
             with patch(
-                "m4.mcp_server.DatasetRegistry.get_active",
+                "oasis.mcp_server.DatasetRegistry.get_active",
                 side_effect=DatasetError("No active dataset"),
             ):
                 async with Client(mcp) as client:

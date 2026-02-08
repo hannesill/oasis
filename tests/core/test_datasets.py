@@ -1,4 +1,4 @@
-"""Tests for m4.core.datasets module.
+"""Tests for oasis.core.datasets module.
 
 Tests cover:
 - Modality enum
@@ -11,7 +11,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from m4.core.datasets import (
+from oasis.core.datasets import (
     DatasetDefinition,
     DatasetRegistry,
     Modality,
@@ -220,8 +220,8 @@ class TestDatasetRegistryEdgeCases:
         """get_active() raises DatasetError when no dataset is configured."""
         import pytest
 
-        import m4.config as cfg
-        from m4.core.exceptions import DatasetError
+        import oasis.config as cfg
+        from oasis.core.exceptions import DatasetError
 
         monkeypatch.setattr(cfg, "get_active_dataset", lambda: None)
 
@@ -232,8 +232,8 @@ class TestDatasetRegistryEdgeCases:
         """get_active() raises DatasetError when config points to unknown dataset."""
         import pytest
 
-        import m4.config as cfg
-        from m4.core.exceptions import DatasetError
+        import oasis.config as cfg
+        from oasis.core.exceptions import DatasetError
 
         monkeypatch.setattr(cfg, "get_active_dataset", lambda: "no-such-dataset")
 
@@ -242,7 +242,7 @@ class TestDatasetRegistryEdgeCases:
 
     def test_custom_json_oversized_file_skipped(self, tmp_path):
         """JSON files exceeding MAX_DATASET_FILE_SIZE are skipped."""
-        from m4.core.datasets import MAX_DATASET_FILE_SIZE
+        from oasis.core.datasets import MAX_DATASET_FILE_SIZE
 
         big_file = tmp_path / "huge.json"
         big_file.write_text("x" * (MAX_DATASET_FILE_SIZE + 1))
