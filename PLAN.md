@@ -9,7 +9,7 @@ The `geo_map` MCP App (`src/oasis/apps/geo_map/`) is working:
 - Coverage gap visualization (calls `find_coverage_gaps`)
 - Detail card with specialties, equipment, distance
 
-## 45-Second Demo Flow
+## 45-50 Second Demo Flow (Screen Studio — speed-controlled, not live)
 
 ```
 0:00 - 0:10  "Where are surgical deserts in Northern Ghana?"
@@ -22,8 +22,12 @@ The `geo_map` MCP App (`src/oasis/apps/geo_map/`) is working:
              → Impact heatmap overlay, click optimal zone
              → "Would serve 50,000 people currently without access"
 
-0:35 - 0:45  Zoom out → Full Ghana hex grid
-             "Every red zone is a patient waiting"
+0:35 - 0:50  "As a Ghana healthcare official, what's my single most
+              impactful next action?"
+             → Model reasons in chat over desert + anomaly data
+             → "Deploy a surgical team to [location]"
+             → Map flies to that location, impact radius lights up
+             → Presenter: "One question. One answer. That's OASIS."
 ```
 
 ## What's Missing (Priority Order)
@@ -43,33 +47,9 @@ The `geo_map` MCP App (`src/oasis/apps/geo_map/`) is working:
 
 ---
 
-## Phase 1: Model → UI Data Flow ⭐ 4 hours
+## Phase 1: Model → UI Data Flow ✅ DONE
 
-**Goal:** Model passes query results directly to UI. No duplicate queries. Enables model to control the demo narrative.
-
-**Build:**
-
-1. **Enhanced `GeoMapInput`** in `tool.py`:
-   ```python
-   @dataclass
-   class GeoMapInput(ToolInput):
-       location: str = "Accra"
-       condition: str | None = None
-       mode: str = "search"  # "search" or "deserts"
-
-       # Demo control
-       highlight_region: str | None = None  # "Northern" - fly to + dim others
-       narrative_focus: str | None = None   # "deserts" | "anomaly" | "impact"
-       initial_zoom: float = 6.0
-   ```
-
-2. **Pass data via `ontoolresult`** in `mcp-app.ts`:
-   - Tool result includes facilities/gaps array
-   - UI receives it, renders immediately
-   - Skip duplicate `geocode_facilities` call
-   - Apply camera position + region highlighting
-
-**Verify:** Model calls `geo_map(mode="deserts", condition="surgery", highlight_region="Northern", initial_zoom=7)` → Map flies to Northern region, shows surgery gaps, no duplicate query
+Model passes query results directly to UI via `ontoolresult`. Tool accepts `mode`, `condition`, `highlight_region`, `narrative_focus`, `initial_zoom`. UI renders facilities/gaps from tool result without duplicate queries. Camera flies to highlighted region.
 
 ---
 
@@ -137,7 +117,7 @@ The `geo_map` MCP App (`src/oasis/apps/geo_map/`) is working:
 
 **Total: 12 hours** — Build phases sequentially in priority order:
 
-1. **Phase 1** (4h) — Model → UI data flow [CRITICAL]
+1. **Phase 1** ~~(4h)~~ — Model → UI data flow ✅ DONE
 2. **Phase 2** (3h) — H3 hex grid [SIGNATURE VISUAL]
 3. **Phase 3** (5h) — Anomaly + Impact [DEMO BEATS #2 + #4]
 
@@ -165,11 +145,15 @@ oasis use vf-ghana
 geo_map(mode="deserts", condition="surgery", highlight_region="Northern", initial_zoom=7, narrative_focus="deserts")
 # Expect: Red hexes pulse in Northern Ghana, camera flies there
 
-# Beat 2: Anomaly
+# Beat 2: Anomaly (click interactions — Screen Studio controls mouse)
 geo_map(narrative_focus="anomaly")
 # Expect: Fly to facility with ⚠️ badge, card shows "Claims 50 surgeries, only 2 staff"
 
 # Beat 3: Impact
 geo_map(narrative_focus="impact", condition="surgery")
 # Expect: Heatmap shows optimal placement, click → "50,000 people gain access"
+
+# Beat 4: Actionable recommendation (the closer)
+# User types: "As a Ghana healthcare official, what's my single most impactful next action?"
+# Expect: Model reasons in chat, recommends specific location, map flies there, impact radius highlights
 ```

@@ -35,8 +35,6 @@ const app = new App({
 
 let map: any;
 let facilitiesGeoJSON: any = null;
-let activeMarkers: any[] = [];
-let searchResultsCache: any[] = [];
 let layerState = { markers: true, heatmap: false, buildings: false, deserts: false };
 let current3DModel: string | null = null;
 let audioElement: HTMLAudioElement | null = null;
@@ -84,10 +82,7 @@ function $(id: string): HTMLElement { return document.getElementById(id)!; }
 function fmtSpec(s: string): string { return s.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()).trim(); }
 
 function showApiStatus(msg: string, ok: boolean): void {
-  const el = $('api-status');
-  el.textContent = (ok ? '✅ ' : '⚠️ ') + msg;
-  el.className = `api-status glass show ${ok ? 'ok' : 'err'}`;
-  setTimeout(() => { el.classList.remove('show'); }, 5000);
+  console.log(`[OASIS] ${ok ? '✅' : '⚠️'} ${msg}`);
 }
 
 /**
@@ -128,7 +123,7 @@ function initMap(): void {
     antialias: true,
   });
 
-  map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'top-right');
+  // No navigation controls — scroll/pinch to zoom
 
   map.on('style.load', () => {
     map.setFog({
@@ -154,7 +149,6 @@ function initMap(): void {
     // Load facilities via MCP tool
     await loadFacilitiesViaMCP();
     addMapLayers();
-    populateConditionDropdown();
 
     // Determine intro camera target — tool data can override the default
     const toolTarget = resolveToolCameraTarget();
@@ -207,25 +201,12 @@ async function loadFacilitiesViaMCP(): Promise<void> {
     });
 
     allSpecialties = [...specs].sort();
-    $('st-total').textContent = String(facilitiesGeoJSON.features.length);
-    $('st-cities').textContent = String(cities.size);
-    $('st-specs').textContent = String(specs.size);
 
     showApiStatus(`Loaded ${facilitiesGeoJSON.features.length} facilities`, true);
   } catch (err: any) {
     console.error('Failed to load facilities via MCP:', err);
     showApiStatus('Failed to load facilities: ' + err.message, false);
   }
-}
-
-function populateConditionDropdown(): void {
-  const sel = $('inp-condition') as HTMLSelectElement;
-  allSpecialties.forEach(s => {
-    const opt = document.createElement('option');
-    opt.value = s;
-    opt.textContent = fmtSpec(s);
-    sel.appendChild(opt);
-  });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -299,176 +280,6 @@ function addMapLayers(): void {
   map.on('click', 'layer-markers', handleClick);
   map.on('mouseenter', 'layer-markers', () => { map.getCanvas().style.cursor = 'pointer'; });
   map.on('mouseleave', 'layer-markers', () => { map.getCanvas().style.cursor = ''; });
-}
-
-// ═══════════════════════════════════════════════════════════════
-// SEARCH — calls find_facilities_in_radius via MCP
-// ═══════════════════════════════════════════════════════════════
-async function doSearch(): Promise<void> {
-  const condition = (($('inp-condition') as HTMLSelectElement).value);
-  const location = (($('inp-location') as HTMLInputElement).value.trim());
-  const radius = parseInt(($('inp-radius') as HTMLInputElement).value);
-
-  if (!condition) { alert('Select a condition first'); return; }
-
-  const btn = $('btn-search') as HTMLButtonElement;
-  btn.disabled = true;
-  btn.innerHTML = '⟳ Querying MCP tool…';
-
-  try {
-    const data = await callTool('find_facilities_in_radius', {
-      condition, location, radius_km: radius, limit: 20
-    });
-
-    console.log(`✅ find_facilities_in_radius returned ${data.total_found} results`);
-
-    const results = data.facilities.map((f: any) => ({
-      coords: [f.lng, f.lat],
-      distance: f.distance_km,
-      name: f.name,
-      city: f.city,
-      region: f.region,
-      facility_type: f.facility_type,
-      specialties: f.specialties,
-      equipment: f.equipment,
-      capability: f.capability,
-    }));
-
-    searchResultsCache = results;
-    renderResults(results, condition, data.total_found);
-
-    const ctr = [data.center.lng, data.center.lat];
-    map.flyTo({ center: ctr, zoom: 8, pitch: 45, duration: 2000 });
-    drawRadius(ctr, radius);
-    replaceMapWithResults(results);
-    highlightResults(results);
-
-    $('st-total').textContent = String(data.total_found);
-
-    // Update model context so Claude knows what user is looking at
-    await updateModelContext(condition, location, radius, data);
-
-    showApiStatus(`Found ${data.total_found} facilities via MCP`, true);
-  } catch (err: any) {
-    console.error('Search failed:', err);
-    showApiStatus(`Search failed: ${err.message}`, false);
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<span>⚡</span> Find Facilities';
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// COVERAGE GAPS — calls find_coverage_gaps via MCP
-// ═══════════════════════════════════════════════════════════════
-async function doGaps(): Promise<void> {
-  const condition = ($('inp-condition') as HTMLSelectElement).value;
-  if (!condition) { alert('Select a condition first'); return; }
-
-  const btn = $('btn-gaps') as HTMLButtonElement;
-  btn.disabled = true;
-  btn.innerHTML = '⟳ Scanning via MCP…';
-
-  try {
-    const data = await callTool('find_coverage_gaps', {
-      procedure_or_specialty: condition, min_gap_km: 50
-    });
-
-    console.log(`✅ find_coverage_gaps found ${data.gap_count} gaps`);
-    renderDesertGaps(data.gaps);
-    showApiStatus(`Found ${data.gap_count} coverage gaps for ${fmtSpec(condition)}`, true);
-  } catch (err: any) {
-    console.error('Coverage gap search failed:', err);
-    showApiStatus(`Gaps failed: ${err.message}`, false);
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<span>🏜️</span> Find Medical Deserts';
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// RENDER RESULTS
-// ═══════════════════════════════════════════════════════════════
-function renderResults(results: any[], condition: string, totalFromTool: number): void {
-  const section = $('results-section');
-  const list = $('results-list');
-  const label = $('results-label');
-
-  section.style.display = 'block';
-  label.textContent = `${totalFromTool} found — ${fmtSpec(condition)}`;
-
-  if (results.length === 0) {
-    list.innerHTML = `<div style="text-align:center;padding:20px;color:var(--t3);"><div style="font-size:32px;margin-bottom:8px;">🏜️</div><div>No facilities found</div><div style="font-size:11px;margin-top:4px;">Try a larger radius</div></div>`;
-    return;
-  }
-
-  list.innerHTML = results.slice(0, 10).map((r: any, i: number) => {
-    let specs: string[] = [];
-    try { specs = JSON.parse(r.specialties || '[]'); } catch (e) { /* ignore */ }
-    const score = Math.min(99, Math.round(85 - r.distance * 0.3 + Math.min(15, specs.length * 2)));
-    const color = score > 80 ? 'var(--green)' : score > 50 ? 'var(--accent)' : 'var(--yellow)';
-    const bar = score > 80 ? 'linear-gradient(90deg,#00E676,#69F0AE)' : score > 50 ? 'linear-gradient(90deg,#FF6B35,#FF8F6B)' : 'linear-gradient(90deg,#FFD740,#FFE57F)';
-
-    return `
-      <div class="result-card" data-idx="${i}">
-        <div class="rank">${i + 1}</div>
-        <div class="name">${r.name}</div>
-        <div class="meta">
-          <span>📍 ${r.distance.toFixed(1)} km</span>
-          <span>🏥 ${r.facility_type || '—'}</span>
-          <span>🏙️ ${r.city || '—'}</span>
-        </div>
-        <div class="match-label"><span>Relevance</span><span style="color:${color}">${score}%</span></div>
-        <div class="match-bar"><div class="match-fill" style="width:${score}%;background:${bar};"></div></div>
-        ${specs.length ? `<div class="tags">${specs.slice(0, 4).map(s => `<span class="tag">${fmtSpec(s)}</span>`).join('')}${specs.length > 4 ? `<span class="tag">+${specs.length - 4}</span>` : ''}</div>` : ''}
-      </div>`;
-  }).join('');
-
-  // Add click handlers
-  list.querySelectorAll('.result-card').forEach((card: Element) => {
-    card.addEventListener('click', () => {
-      const idx = parseInt((card as HTMLElement).dataset.idx || '0');
-      selectResult(idx);
-    });
-  });
-}
-
-function selectResult(i: number): void {
-  document.querySelectorAll('.result-card').forEach(c => c.classList.remove('active'));
-  const card = document.querySelector(`.result-card[data-idx="${i}"]`);
-  if (card) card.classList.add('active');
-  const r = searchResultsCache[i];
-  if (!r) return;
-  const lngLat = { lng: r.coords[0], lat: r.coords[1] };
-  map.flyTo({ center: r.coords, zoom: 16, pitch: 60, bearing: Math.random() * 60 - 30, duration: 2000 });
-  if (!layerState.buildings) toggleLayer('buildings');
-  showDetail(r, lngLat);
-}
-
-function replaceMapWithResults(results: any[]): void {
-  const filteredGeoJSON = {
-    type: 'FeatureCollection',
-    features: results.map(r => ({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: r.coords },
-      properties: { name: r.name, city: r.city, region: r.region, facility_type: r.facility_type, specialties: r.specialties, equipment: r.equipment, capability: r.capability, distance: r.distance }
-    }))
-  };
-  map.getSource('facilities').setData(filteredGeoJSON);
-}
-
-function resetMapToAllFacilities(): void {
-  if (facilitiesGeoJSON) map.getSource('facilities').setData(facilitiesGeoJSON);
-}
-
-function highlightResults(results: any[]): void {
-  activeMarkers.forEach(m => m.remove());
-  activeMarkers = [];
-  results.slice(0, 10).forEach((r: any, i: number) => {
-    const el = document.createElement('div');
-    el.style.cssText = `width:${i === 0 ? 18 : 14}px;height:${i === 0 ? 18 : 14}px;border-radius:50%;background:${i === 0 ? 'var(--green)' : 'var(--accent)'};border:2px solid rgba(255,255,255,0.8);cursor:pointer;box-shadow:0 0 12px ${i === 0 ? 'rgba(0,230,118,0.6)' : 'var(--accent-glow)'};`;
-    activeMarkers.push(new mapboxgl.Marker(el).setLngLat(r.coords).addTo(map));
-  });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -552,7 +363,8 @@ function closeDetail(): void {
 function toggleLayer(name: string): void {
   (layerState as any)[name] = !(layerState as any)[name];
   const on = (layerState as any)[name];
-  $(`tog-${name}`).classList.toggle('on', on);
+  const btn = document.getElementById(`tog-${name}`);
+  if (btn) btn.classList.toggle('on', on);
 
   switch (name) {
     case 'markers':
@@ -570,55 +382,9 @@ function toggleLayer(name: string): void {
       if (map.getLayer('desert-circles')) {
         map.setLayoutProperty('desert-circles', 'visibility', on ? 'visible' : 'none');
         map.setLayoutProperty('desert-labels', 'visibility', on ? 'visible' : 'none');
-      } else if (on) { doGaps(); }
+      }
       break;
   }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// SEARCH RADIUS
-// ═══════════════════════════════════════════════════════════════
-function drawRadius(center: number[], km: number): void {
-  if (map.getSource('search-radius')) {
-    map.removeLayer('radius-fill');
-    map.removeLayer('radius-line');
-    map.removeSource('search-radius');
-  }
-  const pts = 64, coords: number[][] = [];
-  for (let i = 0; i <= pts; i++) {
-    const a = (i / pts) * 2 * Math.PI;
-    const dx = km / 111.32 * Math.cos(a);
-    const dy = km / (111.32 * Math.cos(center[1] * Math.PI / 180)) * Math.sin(a);
-    coords.push([center[0] + dy, center[1] + dx]);
-  }
-  map.addSource('search-radius', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'Polygon', coordinates: [coords] } } });
-  map.addLayer({ id: 'radius-fill', type: 'fill', source: 'search-radius', paint: { 'fill-color': 'rgba(0,212,255,0.06)' } }, 'layer-glow');
-  map.addLayer({ id: 'radius-line', type: 'line', source: 'search-radius', paint: { 'line-color': 'rgba(0,212,255,0.4)', 'line-width': 2, 'line-dasharray': [3, 3] } });
-}
-
-// ═══════════════════════════════════════════════════════════════
-// NAVIGATION
-// ═══════════════════════════════════════════════════════════════
-function flyTo(lng: number, lat: number, zoom: number): void {
-  map.flyTo({ center: [lng, lat], zoom, pitch: 60, bearing: -15, duration: 2500 });
-  if (!layerState.buildings) toggleLayer('buildings');
-}
-
-function resetGlobe(): void {
-  closeDetail();
-  resetMapToAllFacilities();
-  $('results-section').style.display = 'none';
-  activeMarkers.forEach(m => m.remove());
-  activeMarkers = [];
-  searchResultsCache = [];
-  if (map.getSource('search-radius')) {
-    map.removeLayer('radius-fill');
-    map.removeLayer('radius-line');
-    map.removeSource('search-radius');
-  }
-  if (facilitiesGeoJSON) $('st-total').textContent = String(facilitiesGeoJSON.features.length);
-  map.flyTo({ center: [-1.0232, 7.9465], zoom: 6.5, pitch: 45, bearing: -15, duration: 3000 });
-  if (layerState.buildings) toggleLayer('buildings');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -749,40 +515,6 @@ async function narrateFacility(props: any): Promise<void> {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// MODEL CONTEXT — tell Claude what user is looking at
-// ═══════════════════════════════════════════════════════════════
-async function updateModelContext(condition: string, location: string, radius: number, data: any): Promise<void> {
-  const facilitySummary = data.facilities?.slice(0, 5).map((f: any) =>
-    `- ${f.name} (${f.city}, ${f.distance_km.toFixed(1)} km)`
-  ).join('\n') || 'No facilities found.';
-
-  const markdown = `---
-condition: ${condition}
-location: ${location}
-radius_km: ${radius}
-total_found: ${data.total_found}
----
-
-Current map view in OASIS GeoMap:
-
-**Search:** ${fmtSpec(condition)} within ${radius} km of ${location}
-**Results:** ${data.total_found} facilities found
-
-**Top facilities:**
-${facilitySummary}
-
-${data.summary || ''}`;
-
-  try {
-    await app.updateModelContext({
-      content: [{ type: "text", text: markdown }],
-    });
-  } catch {
-    // Silently ignore if host doesn't support updateModelContext
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════
 // HOST CONTEXT — theme, safe areas
 // ═══════════════════════════════════════════════════════════════
 function applyHostContext(ctx: McpUiHostContext): void {
@@ -855,32 +587,6 @@ function applyToolData(): void {
     showApiStatus(`${data.gap_count || data.gaps.length} coverage gaps for ${data.query?.condition || 'specialty'}`, true);
   }
 
-  // -- Search mode: render facility results directly --
-  if (data.mode === 'search' && data.facilities?.length > 0) {
-    const results = data.facilities.map((f: any) => ({
-      coords: [f.lng, f.lat],
-      distance: f.distance_km,
-      name: f.name,
-      city: f.city,
-      region: f.region,
-      facility_type: f.facility_type,
-      specialties: f.specialties,
-      equipment: f.equipment,
-      capability: f.capability,
-    }));
-
-    searchResultsCache = results;
-    renderResults(results, data.query?.condition || '', data.total_found || results.length);
-    replaceMapWithResults(results);
-    highlightResults(results);
-
-    if (data.center?.lat && data.center?.lng) {
-      drawRadius([data.center.lng, data.center.lat], data.query?.radius_km || 50);
-    }
-
-    showApiStatus(`${data.total_found || results.length} facilities loaded from model`, true);
-  }
-
   // -- Narrative focus overlays --
   if (data.narrative_focus === 'deserts' && !layerState.heatmap) {
     toggleLayer('heatmap');
@@ -925,11 +631,9 @@ app.onhostcontextchanged = (ctx) => {
   applyHostContext(ctx);
   if (ctx.displayMode) {
     currentDisplayMode = ctx.displayMode;
-    $('tog-fullscreen').classList.toggle('on', currentDisplayMode === 'fullscreen');
+    const btn = document.getElementById('tog-fullscreen');
+    if (btn) btn.classList.toggle('on', currentDisplayMode === 'fullscreen');
     setTimeout(() => map?.resize(), 100);
-  }
-  if (ctx.availableDisplayModes) {
-    $('tog-fullscreen').style.display = ctx.availableDisplayModes.includes('fullscreen') ? '' : 'none';
   }
 };
 
@@ -948,36 +652,29 @@ async function toggleFullscreen(): Promise<void> {
   const newMode = currentDisplayMode === 'fullscreen' ? 'inline' : 'fullscreen';
   const result = await app.requestDisplayMode({ mode: newMode });
   currentDisplayMode = result.mode;
-  $('tog-fullscreen').classList.toggle('on', currentDisplayMode === 'fullscreen');
+  const btn = document.getElementById('tog-fullscreen');
+  if (btn) btn.classList.toggle('on', currentDisplayMode === 'fullscreen');
   setTimeout(() => map?.resize(), 100);
 }
 
 // ═══════════════════════════════════════════════════════════════
 // EVENT LISTENERS
 // ═══════════════════════════════════════════════════════════════
-$('btn-search').addEventListener('click', doSearch);
-$('btn-gaps').addEventListener('click', doGaps);
-$('btn-clear').addEventListener('click', resetGlobe);
 $('btn-close-detail').addEventListener('click', closeDetail);
-$('btn-globe')?.addEventListener('click', resetGlobe);
 $('tog-fullscreen').addEventListener('click', toggleFullscreen);
-
-($('inp-radius') as HTMLInputElement).addEventListener('input', (e) => {
-  $('radius-display').textContent = (e.target as HTMLInputElement).value + ' km';
-});
-
-// Navigation buttons
-document.querySelectorAll('[data-fly]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const [lng, lat, zoom] = (btn as HTMLElement).dataset.fly!.split(',').map(Number);
-    flyTo(lng, lat, zoom);
-  });
-});
 
 // Layer toggle buttons
 document.querySelectorAll('[data-layer]').forEach(btn => {
   btn.addEventListener('click', () => {
     toggleLayer((btn as HTMLElement).dataset.layer!);
+  });
+});
+
+// Navigation pill buttons
+document.querySelectorAll('[data-fly]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const [lng, lat, zoom] = (btn as HTMLElement).dataset.fly!.split(',').map(Number);
+    map.flyTo({ center: [lng, lat], zoom, pitch: 45, bearing: -15, duration: 2500 });
   });
 });
 
@@ -991,7 +688,6 @@ app.connect().then(() => {
   // Request initial iframe height from the host
   app.sendSizeChanged({ width: 0, height: 600 });
 
-  showApiStatus('Connected to Claude Desktop via MCP', true);
-  $('status-dot').style.background = 'var(--green)';
+  console.log('[OASIS] Connected to Claude Desktop via MCP');
 });
 
