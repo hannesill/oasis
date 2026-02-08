@@ -83,3 +83,6 @@ notes/
 node_modules/
 
 .mystuff/
+
+AGENTS.md
+CLAUDE.md

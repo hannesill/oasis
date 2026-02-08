@@ -623,6 +623,51 @@ def _inject_geo_map_meta() -> None:
 _inject_geo_map_meta()
 
 
+# Inject _meta.ui.csp into the geo_map resource content so Claude Desktop's
+# sandbox allows Mapbox tile/API requests and ElevenLabs narration.
+def _inject_geo_map_csp() -> None:
+    """Patch resources/read handler to add CSP domains to geo-map resource."""
+    import mcp.types as mcp_types
+
+    fastmcp_server = globals()["mcp"]  # module-level FastMCP instance
+    low_level = fastmcp_server._mcp_server
+    original_handler = low_level.request_handlers.get(mcp_types.ReadResourceRequest)
+    if original_handler is None:
+        return
+
+    _CSP_META = {
+        "ui": {
+            "csp": {
+                "connectDomains": [
+                    "https://api.mapbox.com",
+                    "https://events.mapbox.com",
+                    "https://tiles.mapbox.com",
+                    "https://api.elevenlabs.io",
+                ],
+                "resourceDomains": [
+                    "https://api.mapbox.com",
+                    "https://tiles.mapbox.com",
+                ],
+            }
+        }
+    }
+
+    async def patched_handler(req: mcp_types.ReadResourceRequest) -> Any:
+        result = await original_handler(req)
+        # Inject _meta.ui.csp into geo-map resource content items
+        if str(req.params.uri) == GEO_MAP_URI and hasattr(result, "root"):
+            read_result = result.root
+            if hasattr(read_result, "contents"):
+                for item in read_result.contents:
+                    item.meta = _CSP_META
+        return result
+
+    low_level.request_handlers[mcp_types.ReadResourceRequest] = patched_handler
+
+
+_inject_geo_map_csp()
+
+
 # ------------------------------------------
 # Databricks integration (Genie, RAG, MLflow)
 # ------------------------------------------
