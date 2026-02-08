@@ -135,9 +135,11 @@ function initMap(): void {
   // No navigation controls — scroll/pinch to zoom
 
   map.on('style.load', () => {
-    map.setConfigProperty('basemap', 'lightPreset', 'dusk');
+    map.setConfigProperty('basemap', 'lightPreset', 'night');
     map.setConfigProperty('basemap', 'showPointOfInterestLabels', false);
     map.setConfigProperty('basemap', 'showTransitLabels', false);
+    map.setConfigProperty('basemap', 'showPlaceLabels', false);
+    map.setConfigProperty('basemap', 'showRoadLabels', false);
   });
 
   map.on('error', (e: any) => {
@@ -213,6 +215,64 @@ async function loadFacilitiesViaMCP(): Promise<void> {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// 3D MARKER IMAGE — canvas-drawn pin for elevated display
+// ═══════════════════════════════════════════════════════════════
+function create3DMarkerImage(): HTMLCanvasElement {
+  const w = 64;
+  const h = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d')!;
+  const cx = w / 2;
+  const headY = 28;
+
+  // Outer glow around beacon head
+  const glow = ctx.createRadialGradient(cx, headY, 0, cx, headY, 28);
+  glow.addColorStop(0, 'rgba(255, 107, 53, 0.7)');
+  glow.addColorStop(0.5, 'rgba(255, 107, 53, 0.15)');
+  glow.addColorStop(1, 'rgba(255, 107, 53, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, w, 56);
+
+  // Stem — thin line from head down to anchor point
+  ctx.beginPath();
+  ctx.moveTo(cx, headY + 14);
+  ctx.lineTo(cx, h - 6);
+  ctx.strokeStyle = 'rgba(255, 107, 53, 0.45)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Ground anchor dot
+  ctx.beginPath();
+  ctx.arc(cx, h - 4, 3.5, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255, 107, 53, 0.25)';
+  ctx.fill();
+
+  // Beacon head — outer ring
+  ctx.beginPath();
+  ctx.arc(cx, headY, 12, 0, Math.PI * 2);
+  ctx.fillStyle = '#FF6B35';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // Beacon head — inner highlight
+  ctx.beginPath();
+  ctx.arc(cx, headY, 5, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+  ctx.fill();
+
+  // Medical cross on beacon (subtle)
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+  ctx.fillRect(cx - 1.2, headY - 6, 2.4, 12);
+  ctx.fillRect(cx - 6, headY - 1.2, 12, 2.4);
+
+  return canvas;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // MAP LAYERS
 // ═══════════════════════════════════════════════════════════════
 function addMapLayers(): void {
@@ -240,23 +300,22 @@ function addMapLayers(): void {
   // Glow
   map.addLayer({
     id: 'layer-glow', type: 'circle', source: 'facilities',
-    slot: 'middle',
+    slot: 'top',
     paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 6, 8, 12, 12, 18],
-      'circle-color': '#FF6B35', 'circle-opacity': 0.15, 'circle-blur': 1,
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 6, 8, 12, 12, 18, 16, 24, 20, 30],
+      'circle-color': '#FF6B35', 'circle-opacity': 0.2, 'circle-blur': 1,
     }
   });
 
-  // Markers (flat circles)
+  // Markers (flat circles — visible at ALL zoom levels)
   map.addLayer({
     id: 'layer-markers', type: 'circle', source: 'facilities',
-    slot: 'middle',
-    maxzoom: 10,
+    slot: 'top',
     paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 2.5, 8, 5, 10, 8],
-      'circle-color': '#FF6B35', 'circle-opacity': 0.85,
-      'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 4, 0.5, 10, 2],
-      'circle-stroke-color': 'rgba(255,255,255,0.6)', 'circle-blur': 0.1,
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 3, 8, 5, 12, 7, 16, 10, 20, 14],
+      'circle-color': '#FF6B35', 'circle-opacity': 1,
+      'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 4, 0.5, 10, 1.5, 16, 2.5],
+      'circle-stroke-color': 'rgba(255,255,255,0.9)',
     }
   });
 
@@ -264,13 +323,45 @@ function addMapLayers(): void {
   const handleClick = (e: any) => {
     const f = e.features[0];
     const lngLat = e.lngLat;
-    map.flyTo({ center: lngLat, zoom: Math.max(map.getZoom(), 16), pitch: 60, duration: 1500 });
+    map.flyTo({ center: lngLat, zoom: Math.max(map.getZoom(), 14), pitch: 60, duration: 1500 });
     showDetail(f.properties, lngLat);
   };
 
   map.on('click', 'layer-markers', handleClick);
   map.on('mouseenter', 'layer-markers', () => { map.getCanvas().style.cursor = 'pointer'; });
   map.on('mouseleave', 'layer-markers', () => { map.getCanvas().style.cursor = ''; });
+
+  // Glow layer as fallback click target
+  map.on('click', 'layer-glow', handleClick);
+  map.on('mouseenter', 'layer-glow', () => { map.getCanvas().style.cursor = 'pointer'; });
+  map.on('mouseleave', 'layer-glow', () => { map.getCanvas().style.cursor = ''; });
+
+  // 3D elevated markers — hovering pins above buildings at zoom 15+
+  map.addImage('marker-3d-pin', create3DMarkerImage(), { pixelRatio: 2 });
+
+  map.addLayer({
+    id: 'layer-markers-3d',
+    type: 'symbol',
+    source: 'facilities',
+    slot: 'top',
+    minzoom: 15,
+    layout: {
+      'icon-image': 'marker-3d-pin',
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 15, 0.65, 18, 1.0, 20, 1.2],
+      'icon-anchor': 'bottom',
+      'icon-allow-overlap': true,
+      'symbol-placement': 'point',
+      'symbol-z-elevate': true,
+    },
+    paint: {
+      'icon-opacity': ['interpolate', ['linear'], ['zoom'], 15, 0, 15.5, 1],
+    }
+  });
+
+  map.on('click', 'layer-markers-3d', handleClick);
+  map.on('mouseenter', 'layer-markers-3d', () => { map.getCanvas().style.cursor = 'pointer'; });
+  map.on('mouseleave', 'layer-markers-3d', () => { map.getCanvas().style.cursor = ''; });
+
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -364,6 +455,9 @@ function toggleLayer(name: string): void {
     case 'markers':
       map.setLayoutProperty('layer-markers', 'visibility', on ? 'visible' : 'none');
       map.setLayoutProperty('layer-glow', 'visibility', on ? 'visible' : 'none');
+      if (map.getLayer('layer-markers-3d')) {
+        map.setLayoutProperty('layer-markers-3d', 'visibility', on ? 'visible' : 'none');
+      }
       break;
     case 'heatmap':
       map.setLayoutProperty('layer-heatmap', 'visibility', on ? 'visible' : 'none');

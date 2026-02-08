@@ -87,6 +87,100 @@ GHANA_CITY_COORDS: dict[str, tuple[float, float]] = {
     "circle": (5.5700, -0.2200),
     "kaneshie": (5.5700, -0.2400),
     "mamprobi": (5.5333, -0.2333),
+    # Additional cities (2+ facilities)
+    "berekum": (7.4534, -2.5840),
+    "atebubu": (7.7504, -0.9852),
+    "weija": (5.5718, -0.3346),
+    "battor": (6.0667, 0.4167),
+    "bibiani": (6.4667, -2.3333),
+    "oyarifa": (5.7570, -0.1749),
+    "sekondi": (4.9268, -1.7577),
+    "akwatia": (6.0402, -0.8088),
+    "akosombo": (6.3000, 0.0500),
+    "walewale": (10.3516, -0.7985),
+    "bechem": (7.0858, -2.0298),
+    "ejisu": (6.7206, -1.4760),
+    "sefwi bekwai": (6.1980, -2.3246),
+    "kpando": (6.9954, 0.2931),
+    "kwadaso": (6.6740, -1.6766),
+    "mampong": (7.0624, -1.4046),
+    "dompoase": (6.3124, -1.5330),
+    "nkwanta": (8.5070, 0.5871),
+    "dzodze": (6.2420, 0.9964),
+    "adidome": (6.0657, 0.5071),
+    "akatsi": (6.1310, 0.7982),
+    "tepa": (7.0072, -2.1696),
+    "agona nkwanta": (4.8883, -1.9658),
+    "tesano": (5.6000, -0.2170),
+    "dome": (5.6500, -0.2361),
+    "tikrom": (6.7000, -1.6200),
+    "dormaa ahenkro": (7.2671, -2.8677),
+    "north kaneshie": (5.5750, -0.2450),
+    "enchi": (5.8167, -2.8167),
+    "kpandai": (8.4705, -0.0117),
+    "sefwi wiawso": (6.2197, -2.5006),
+    "gwo": (6.2700, 0.5600),
+    "wenchi": (7.7392, -2.1046),
+    "kuntanase": (6.5333, -1.4833),
+    "darkuman-nyamekye": (5.5600, -0.2350),
+    "santasi": (6.6700, -1.6400),
+    "mankessim": (5.2728, -1.0155),
+    "somanya": (6.1050, -0.0140),
+    "breman asikuma": (5.5816, -0.9990),
+    "adenta": (5.7142, -0.1542),
+    "haatso": (5.6674, -0.1915),
+    "duayaw nkwanta": (7.1723, -2.1027),
+    "maamobi": (5.5905, -0.1970),
+    "kordiabe": (5.9292, 0.0189),
+    "agroyesum": (6.4140, -1.8780),
+    "adenta municipality": (5.7142, -0.1542),
+    "agona swedru": (5.5338, -0.7013),
+    "worawora": (7.5192, 0.3701),
+    # Notable 1-facility towns (district capitals)
+    "axim": (4.8665, -2.2409),
+    "bimbilla": (8.8500, 0.0667),
+    "bole": (9.0333, -2.4833),
+    "goaso": (6.8036, -2.5172),
+    "sandema": (10.7347, -1.2906),
+    "bekwai": (6.4534, -1.5774),
+    "asamankese": (5.8607, -0.6677),
+    "dunkwa-on-offin": (5.9698, -1.7831),
+    "offinso": (6.9000, -1.6500),
+    "karaga": (9.9200, -0.5200),
+    "yeji": (8.2167, -0.6500),
+    "anloga": (5.7947, 0.8973),
+    "bogoso": (5.5667, -2.0167),
+    "dixcove": (4.7909, -1.9504),
+    "juaboso": (6.3416, -2.8235),
+    "tatale": (9.3567, 0.5266),
+    "tolon": (9.4309, -1.0646),
+    "peki": (6.5231, 0.2275),
+    "agogo": (6.8000, -1.0819),
+    "apam": (5.2968, -0.7409),
+    "nima": (5.5800, -0.1950),
+    "nadawli": (10.2000, -2.5000),
+    "nkonya": (7.1833, 0.3333),
+    "ankaful": (5.2019, -1.0414),
+    "asankrangua": (5.8143, -2.4357),
+    "eikwe": (4.9649, -2.4709),
+    "wiaga": (10.6500, -1.2667),
+    "assin-foso": (5.9167, -1.6000),
+    "legon": (5.6500, -0.1850),
+    "north legon": (5.6600, -0.1800),
+    "labadi": (5.5600, -0.1500),
+    "dzorwulu": (5.6000, -0.2000),
+    "lapaz": (5.6100, -0.2500),
+    "kwashieman": (5.5800, -0.2550),
+    "odorkor": (5.5700, -0.2700),
+    "ridge": (5.5600, -0.2000),
+    "james town": (5.5333, -0.2100),
+    "agbogbloshie": (5.5500, -0.2250),
+    "banda": (8.1667, -2.1333),
+    "kumawu": (6.9000, -1.2667),
+    "wechiau": (10.1000, -2.6500),
+    "new takoradi": (4.9000, -1.7700),
+    "kwesimintsim": (4.9100, -1.7800),
+    "daffiama": (10.3500, -2.4000),
     # Regions (centroid approximations)
     "greater accra": (5.6037, -0.1870),
     "ashanti": (6.7470, -1.5209),
@@ -121,6 +215,42 @@ GHANA_LANDMARKS: dict[str, tuple[float, float]] = {
     "makola market": (5.5500, -0.2000),
     "independence square": (5.5380, -0.1930),
 }
+
+
+# =============================================================================
+# GOLDEN-ANGLE SPIRAL DISTRIBUTION
+# =============================================================================
+# Distributes N points evenly in a circle around a center — no overlaps,
+# deterministic, and looks natural. Used instead of random jitter so that
+# facilities in the same city spread across the urban footprint.
+
+GOLDEN_ANGLE = math.pi * (3.0 - math.sqrt(5.0))  # ~137.508°
+
+
+def _spiral_offset(
+    index: int, total: int, base_lat: float, base_lng: float
+) -> tuple[float, float]:
+    """Return (lat, lng) for the index-th point in a Fermat spiral of `total` points."""
+    if total <= 1:
+        return (base_lat, base_lng)
+
+    # Scale radius by cluster size
+    if total <= 5:
+        max_r = 0.01  # ~1.1 km
+    elif total <= 20:
+        max_r = 0.025  # ~2.8 km
+    elif total <= 50:
+        max_r = 0.045  # ~5.0 km
+    elif total <= 100:
+        max_r = 0.065  # ~7.2 km
+    else:
+        max_r = 0.09  # ~10 km (Accra's 309)
+
+    r = max_r * math.sqrt(index / total)
+    theta = index * GOLDEN_ANGLE
+    lat_off = r * math.cos(theta)
+    lng_off = r * math.sin(theta) / max(math.cos(math.radians(base_lat)), 0.01)
+    return (base_lat + lat_off, base_lng + lng_off)
 
 
 # =============================================================================
@@ -389,13 +519,11 @@ class FindFacilitiesInRadiusTool:
                 "summary": f"No facilities found matching criteria near {params.location}.",
             }
 
-        # Geocode and filter by distance
-        # Add small per-facility jitter so facilities in the same city
-        # get distinct coordinates and slightly different distances.
-        import random
-        import hashlib
+        # Pre-compute spiral positions for ALL facilities (consistent with map)
+        # Pass 1: resolve each facility to a geocode key and group
+        row_data: list[tuple[Any, str, float, float]] = []  # (row, key, lat, lng)
+        groups: dict[str, list[int]] = {}
 
-        facilities = []
         for _, row in df.iterrows():
             city = str(row.get("address_city", "")).strip()
             if not city:
@@ -403,48 +531,52 @@ class FindFacilitiesInRadiusTool:
 
             facility_coords = resolve_location(city)
             if facility_coords is None:
-                # Try with address_line1
                 addr = str(row.get("address_line1", "")).strip()
                 if addr:
                     facility_coords = resolve_location(addr)
             if facility_coords is None:
-                # Try region
                 region = str(row.get("address_stateOrRegion", "")).strip()
                 if region:
                     facility_coords = resolve_location(region)
             if facility_coords is None:
                 continue
 
-            # Deterministic jitter based on facility name (reproducible)
-            name_str = str(row.get("name", ""))
-            seed = int(hashlib.md5(name_str.encode()).hexdigest()[:8], 16)
-            rng = random.Random(seed)
-            lat_jitter = rng.uniform(-0.008, 0.008)  # ~0.9 km
-            lng_jitter = rng.uniform(-0.008, 0.008)
-            jittered_lat = facility_coords[0] + lat_jitter
-            jittered_lng = facility_coords[1] + lng_jitter
+            key = f"{facility_coords[0]:.4f},{facility_coords[1]:.4f}"
+            idx = len(row_data)
+            row_data.append((row, key, facility_coords[0], facility_coords[1]))
+            groups.setdefault(key, []).append(idx)
 
-            dist = haversine_distance(
-                center[0], center[1], jittered_lat, jittered_lng
-            )
+        # Sort each group alphabetically by name (deterministic)
+        for key in groups:
+            groups[key].sort(key=lambda ri: str(row_data[ri][0].get("name", "")))
 
-            if dist <= params.radius_km:
-                facilities.append(
-                    {
-                        "name": row.get("name", "Unknown"),
-                        "city": city,
-                        "region": row.get("address_stateOrRegion", ""),
-                        "distance_km": round(dist, 2),
-                        "lat": jittered_lat,
-                        "lng": jittered_lng,
-                        "facility_type": row.get("facilityTypeId", ""),
-                        "specialties": row.get("specialties", ""),
-                        "procedures": row.get("procedure", ""),
-                        "equipment": row.get("equipment", ""),
-                        "capability": row.get("capability", ""),
-                        "unique_id": row.get("unique_id", ""),
-                    }
-                )
+        # Pass 2: assign spiral offsets and filter by distance
+        facilities = []
+        for key, members in groups.items():
+            total = len(members)
+            base_lat = row_data[members[0]][2]
+            base_lng = row_data[members[0]][3]
+            for rank, ri in enumerate(members):
+                lat, lng = _spiral_offset(rank, total, base_lat, base_lng)
+                dist = haversine_distance(center[0], center[1], lat, lng)
+                if dist <= params.radius_km:
+                    row = row_data[ri][0]
+                    facilities.append(
+                        {
+                            "name": row.get("name", "Unknown"),
+                            "city": str(row.get("address_city", "")).strip(),
+                            "region": row.get("address_stateOrRegion", ""),
+                            "distance_km": round(dist, 2),
+                            "lat": lat,
+                            "lng": lng,
+                            "facility_type": row.get("facilityTypeId", ""),
+                            "specialties": row.get("specialties", ""),
+                            "procedures": row.get("procedure", ""),
+                            "equipment": row.get("equipment", ""),
+                            "capability": row.get("capability", ""),
+                            "unique_id": row.get("unique_id", ""),
+                        }
+                    )
 
         # Sort by distance
         facilities.sort(key=lambda x: x["distance_km"])
@@ -925,7 +1057,11 @@ class GeocodeFacilitiesTool:
         not_geocoded = 0
 
         if df is not None and not df.empty:
-            for _, row in df.iterrows():
+            # Pass 1: resolve each facility to a geocode key and group
+            resolved: list[tuple[int, str, float, float]] = []  # (idx, key, lat, lng)
+            groups: dict[str, list[int]] = {}  # key → list of indices into `resolved`
+
+            for idx, (_, row) in enumerate(df.iterrows()):
                 city = str(row.get("address_city", "")).strip()
                 coords = resolve_location(city)
 
@@ -935,32 +1071,45 @@ class GeocodeFacilitiesTool:
 
                 if coords is None:
                     not_geocoded += 1
+                    resolved.append((idx, "", 0.0, 0.0))
                     continue
 
                 geocoded += 1
+                key = f"{coords[0]:.4f},{coords[1]:.4f}"
+                resolved.append((idx, key, coords[0], coords[1]))
+                groups.setdefault(key, []).append(len(resolved) - 1)
 
-                # Deterministic jitter based on facility name (reproducible)
-                import hashlib
-                import random
+            # Sort each group alphabetically by facility name for deterministic order
+            for key in groups:
+                groups[key].sort(
+                    key=lambda ri: str(df.iloc[resolved[ri][0]].get("name", ""))
+                )
 
-                name_str = str(row.get("name", ""))
-                seed = int(hashlib.md5(name_str.encode()).hexdigest()[:8], 16)
-                rng = random.Random(seed)
-                lat_offset = rng.uniform(-0.005, 0.005)
-                lng_offset = rng.uniform(-0.005, 0.005)
+            # Pass 2: assign spiral offsets per group
+            spiral_positions: dict[int, tuple[float, float]] = {}
+            for key, members in groups.items():
+                total = len(members)
+                base_lat = resolved[members[0]][2]
+                base_lng = resolved[members[0]][3]
+                for rank, ri in enumerate(members):
+                    spiral_positions[ri] = _spiral_offset(rank, total, base_lat, base_lng)
+
+            # Build GeoJSON features
+            for ri, (idx, key, _, _) in enumerate(resolved):
+                if not key:
+                    continue
+                row = df.iloc[idx]
+                lat, lng = spiral_positions[ri]
 
                 feature = {
                     "type": "Feature",
                     "geometry": {
                         "type": "Point",
-                        "coordinates": [
-                            coords[1] + lng_offset,
-                            coords[0] + lat_offset,
-                        ],
+                        "coordinates": [lng, lat],
                     },
                     "properties": {
                         "name": row.get("name", "Unknown"),
-                        "city": city,
+                        "city": str(row.get("address_city", "")).strip(),
                         "region": row.get("address_stateOrRegion", ""),
                         "facility_type": row.get("facilityTypeId", ""),
                         "specialties": row.get("specialties", ""),
