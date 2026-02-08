@@ -15,12 +15,28 @@ Usage:
 import functools
 import json
 import logging
+import os
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 # Module-level state: configured once at startup
 _mlflow = None
 _configured = False
+
+
+def _get_mlruns_dir() -> str:
+    """Get an absolute path for local MLflow storage.
+
+    Uses OASIS_DATA_DIR/mlruns if set, otherwise falls back to
+    the project's oasis_data/mlruns directory. This avoids depending
+    on the CWD being writable (Claude Desktop doesn't set CWD).
+    """
+    data_dir = os.environ.get("OASIS_DATA_DIR")
+    if data_dir:
+        return str(Path(data_dir) / "mlruns")
+    # Fallback: next to this source file (unlikely in production)
+    return str(Path(__file__).resolve().parent.parent.parent.parent / "oasis_data" / "mlruns")
 
 
 def configure_tracing() -> None:
@@ -41,11 +57,11 @@ def configure_tracing() -> None:
             mlflow.set_tracking_uri("databricks")
             logger.info("MLflow tracing → Databricks (%s)", cfg.host)
         else:
-            logger.info("MLflow tracing → local (./mlruns)")
+            mlruns_dir = _get_mlruns_dir()
+            mlflow.set_tracking_uri(f"file://{mlruns_dir}")
+            logger.info("MLflow tracing → local (%s)", mlruns_dir)
 
         mlflow.set_experiment("/oasis")
-        # Enable autologging for traces
-        mlflow.enable_system_metrics_logging()
         _mlflow = mlflow
         _configured = True
     except Exception as e:
