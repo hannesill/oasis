@@ -57,11 +57,9 @@ junit.xml
 *.tmp
 *.swp
 
-# Local database files
-# alright for hackathon
-
-# Configuration files
-# alright for hackathon
+# Local database files (contain machine-specific paths, regenerate with `oasis init`)
+*_data/databases/*.duckdb
+*_data/config.json
 
 # Operating System specific files
 .DS_Store

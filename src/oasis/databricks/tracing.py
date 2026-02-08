@@ -5,7 +5,7 @@ with inputs, outputs, and timing. Traces are sent to Databricks (if
 configured) or stored locally in ./mlruns.
 
 Usage:
-    from m4.databricks.tracing import traced
+    from oasis.databricks.tracing import traced
 
     @traced
     def my_tool(query: str) -> str:
@@ -34,7 +34,7 @@ def configure_tracing() -> None:
         return
 
     try:
-        from m4.databricks.config import get_config
+        from oasis.databricks.config import get_config
 
         cfg = get_config()
         if cfg.is_configured:

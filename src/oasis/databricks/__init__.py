@@ -9,7 +9,7 @@ All features are optional and degrade gracefully when dependencies
 or credentials are missing. Existing M4 tools are unaffected.
 
 Usage (in mcp_server.py):
-    from m4.databricks import register_databricks_tools
+    from oasis.databricks import register_databricks_tools
     register_databricks_tools(mcp)
 """
 
@@ -29,13 +29,13 @@ def register_databricks_tools(mcp) -> None:
         mcp: The FastMCP server instance.
     """
     # 1. Configure MLflow tracing (wraps all subsequent tool registrations)
-    from m4.databricks.tracing import configure_tracing, register_tracing_tools
+    from oasis.databricks.tracing import configure_tracing, register_tracing_tools
 
     configure_tracing()
 
     # 2. Register RAG semantic search tool
     try:
-        from m4.databricks.rag import register_rag_tools
+        from oasis.databricks.rag import register_rag_tools
 
         register_rag_tools(mcp)
         logger.info("Registered: search_facility_capabilities (RAG)")
@@ -44,7 +44,7 @@ def register_databricks_tools(mcp) -> None:
 
     # 3. Register Genie text-to-SQL tool
     try:
-        from m4.databricks.genie import register_genie_tools
+        from oasis.databricks.genie import register_genie_tools
 
         register_genie_tools(mcp)
         logger.info("Registered: ask_genie (Databricks text-to-SQL)")

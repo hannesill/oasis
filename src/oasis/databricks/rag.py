@@ -14,15 +14,15 @@ from pathlib import Path
 
 import numpy as np
 
-from m4.core.backends import get_backend
-from m4.core.datasets import DatasetRegistry
+from oasis.core.backends import get_backend
+from oasis.core.datasets import DatasetRegistry
 
 logger = logging.getLogger(__name__)
 
 _engine: "FacilitySearchEngine | None" = None
 
 _FREEFORM_COLUMNS = ("procedure", "equipment", "capability")
-_DATA_DIR = Path(os.environ.get("M4_DATA_DIR", "m4_data"))
+_DATA_DIR = Path(os.environ.get("OASIS_DATA_DIR", "oasis_data"))
 _CACHE_DIR = _DATA_DIR / "embeddings"
 _CACHE_FILE = _CACHE_DIR / "vf-ghana.npz"
 
@@ -198,7 +198,7 @@ def _get_engine() -> FacilitySearchEngine:
 def register_rag_tools(mcp) -> None:
     """Register the RAG search tool with the MCP server."""
 
-    from m4.databricks.tracing import traced
+    from oasis.databricks.tracing import traced
 
     @traced
     def _do_search(query: str, top_k: int) -> list[dict]:

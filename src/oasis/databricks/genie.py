@@ -27,7 +27,7 @@ def _ask_genie(question: str) -> dict:
     from databricks.sdk import WorkspaceClient
     from databricks.sdk.service.dashboards import MessageStatus
 
-    from m4.databricks.config import get_config
+    from oasis.databricks.config import get_config
 
     cfg = get_config()
     if not cfg.genie_available:
@@ -95,7 +95,7 @@ def _ask_genie(question: str) -> dict:
 def register_genie_tools(mcp) -> None:
     """Register the Genie text-to-SQL tool with the MCP server."""
 
-    from m4.databricks.tracing import traced
+    from oasis.databricks.tracing import traced
 
     @traced
     def _do_genie_query(question: str) -> dict:

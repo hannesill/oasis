@@ -498,7 +498,7 @@ def list_patient_notes(
 # ------------------------------------------
 # Databricks integration (Genie, RAG, MLflow)
 # ------------------------------------------
-from m4.databricks import register_databricks_tools
+from oasis.databricks import register_databricks_tools
 
 register_databricks_tools(mcp)
 
