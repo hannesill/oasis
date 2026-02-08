@@ -15,6 +15,13 @@ from m4.core.tools.management import (
     ListDatasetsTool,
     SetDatasetTool,
 )
+from m4.core.tools.geospatial import (
+    CalculateDistanceTool,
+    CountFacilitiesTool,
+    FindCoverageGapsTool,
+    FindFacilitiesInRadiusTool,
+    GeocodeFacilitiesTool,
+)
 from m4.core.tools.notes import (
     GetNoteTool,
     ListPatientNotesTool,
@@ -70,6 +77,13 @@ def init_tools() -> None:
         ToolRegistry.register(GetNoteTool())
         ToolRegistry.register(ListPatientNotesTool())
 
+        # Register geospatial tools
+        ToolRegistry.register(CountFacilitiesTool())
+        ToolRegistry.register(FindFacilitiesInRadiusTool())
+        ToolRegistry.register(FindCoverageGapsTool())
+        ToolRegistry.register(CalculateDistanceTool())
+        ToolRegistry.register(GeocodeFacilitiesTool())
+
         _tools_initialized = True
 
 
@@ -87,8 +101,12 @@ def reset_tools() -> None:
 
 
 __all__ = [
+    "CalculateDistanceTool",
     "CompatibilityResult",
     "ExecuteQueryTool",
+    "FindCoverageGapsTool",
+    "FindFacilitiesInRadiusTool",
+    "GeocodeFacilitiesTool",
     "GetDatabaseSchemaTool",
     "GetNoteTool",
     "GetTableInfoTool",

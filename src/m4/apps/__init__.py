@@ -28,7 +28,12 @@ def init_apps() -> None:
     with _apps_lock:
         if _apps_initialized:
             return
-        # No apps registered yet — add custom apps here
+
+        # Register GeoMap app
+        from m4.apps.geo_map.tool import GeoMapTool
+        
+        ToolRegistry.register(GeoMapTool())
+
         _apps_initialized = True
 
 
