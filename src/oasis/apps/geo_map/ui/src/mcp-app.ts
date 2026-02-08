@@ -36,9 +36,10 @@ const app = new App({
 
 let map: any;
 let facilitiesGeoJSON: any = null;
-let layerState = { markers: true, heatmap: false, buildings: false, deserts: false };
+let layerState = { markers: true, heatmap: false, deserts: false };
 let current3DModel: string | null = null;
 let audioElement: HTMLAudioElement | null = null;
+let currentFacilityCoords: [number, number] | null = null;
 let allSpecialties: string[] = [];
 
 // Tool result data — stored by ontoolresult, consumed after map loads
@@ -122,7 +123,7 @@ function initMap(): void {
 
   map = new mapboxgl.Map({
     container: 'map',
-    style: 'mapbox://styles/mapbox/dark-v11',
+    style: 'mapbox://styles/mapbox/standard',
     projection: 'globe',
     center: [0, 20],
     zoom: 1.8,
@@ -134,13 +135,9 @@ function initMap(): void {
   // No navigation controls — scroll/pinch to zoom
 
   map.on('style.load', () => {
-    map.setFog({
-      color: 'rgb(10,10,30)',
-      'high-color': 'rgb(30,50,120)',
-      'horizon-blend': 0.08,
-      'space-color': 'rgb(5,5,15)',
-      'star-intensity': 0.95,
-    });
+    map.setConfigProperty('basemap', 'lightPreset', 'dusk');
+    map.setConfigProperty('basemap', 'showPointOfInterestLabels', false);
+    map.setConfigProperty('basemap', 'showTransitLabels', false);
   });
 
   map.on('error', (e: any) => {
@@ -152,7 +149,6 @@ function initMap(): void {
   map.on('load', async () => {
     map.addSource('mapbox-dem', { type: 'raster-dem', url: 'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize: 512, maxzoom: 14 });
     map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 });
-    map.addLayer({ id: 'sky', type: 'sky', paint: { 'sky-type': 'atmosphere', 'sky-atmosphere-sun': [0, 90], 'sky-atmosphere-sun-intensity': 15 } });
 
     // Load facilities via MCP tool
     await loadFacilitiesViaMCP();
@@ -187,7 +183,6 @@ function initMap(): void {
     }
   }, 15000);
 
-  map.on('zoom', () => { if (map.getZoom() >= 14 && !layerState.buildings) toggleLayer('buildings'); });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -228,6 +223,7 @@ function addMapLayers(): void {
   // Heatmap
   map.addLayer({
     id: 'layer-heatmap', type: 'heatmap', source: 'facilities',
+    slot: 'middle',
     layout: { visibility: 'none' },
     paint: {
       'heatmap-weight': ['interpolate', ['linear'], ['length', ['to-string', ['get', 'specialties']]], 10, 0.2, 100, 0.5, 300, 1],
@@ -239,11 +235,12 @@ function addMapLayers(): void {
       ],
       'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 5, 0.8, 12, 0.3],
     }
-  }, 'waterway-label');
+  });
 
   // Glow
   map.addLayer({
     id: 'layer-glow', type: 'circle', source: 'facilities',
+    slot: 'middle',
     paint: {
       'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 6, 8, 12, 12, 18],
       'circle-color': '#FF6B35', 'circle-opacity': 0.15, 'circle-blur': 1,
@@ -253,6 +250,7 @@ function addMapLayers(): void {
   // Markers (flat circles)
   map.addLayer({
     id: 'layer-markers', type: 'circle', source: 'facilities',
+    slot: 'middle',
     maxzoom: 10,
     paint: {
       'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 2.5, 8, 5, 10, 8],
@@ -262,26 +260,11 @@ function addMapLayers(): void {
     }
   });
 
-  // 3D Buildings from Mapbox tiles
-  const labelLayer = map.getStyle().layers.find((l: any) => l.type === 'symbol' && l.layout?.['text-field']);
-  map.addLayer({
-    id: 'layer-buildings', source: 'composite', 'source-layer': 'building',
-    filter: ['==', 'extrude', 'true'], type: 'fill-extrusion', minzoom: 13,
-    layout: { visibility: 'none' },
-    paint: {
-      'fill-extrusion-color': ['interpolate', ['linear'], ['get', 'height'], 0, '#1a1a3e', 20, '#2a2a5e', 50, '#4a3a7e'],
-      'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 13, 0, 14.5, ['get', 'height']],
-      'fill-extrusion-base': ['interpolate', ['linear'], ['zoom'], 13, 0, 14.5, ['get', 'min_height']],
-      'fill-extrusion-opacity': 0.75,
-    }
-  }, labelLayer ? labelLayer.id : undefined);
-
   // Click handlers
   const handleClick = (e: any) => {
     const f = e.features[0];
     const lngLat = e.lngLat;
     map.flyTo({ center: lngLat, zoom: Math.max(map.getZoom(), 16), pitch: 60, duration: 1500 });
-    if (!layerState.buildings) toggleLayer('buildings');
     showDetail(f.properties, lngLat);
   };
 
@@ -309,6 +292,7 @@ function renderDesertGaps(gaps: any[]): void {
   map.addSource('desert-gaps', { type: 'geojson', data: { type: 'FeatureCollection', features } });
   map.addLayer({
     id: 'desert-circles', type: 'circle', source: 'desert-gaps',
+    slot: 'middle',
     paint: {
       'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 20, 8, 40, 12, 60],
       'circle-color': ['case', ['==', ['get', 'severity'], 'critical'], 'rgba(255,82,82,0.25)', 'rgba(255,152,0,0.2)'],
@@ -320,6 +304,7 @@ function renderDesertGaps(gaps: any[]): void {
 
   map.addLayer({
     id: 'desert-labels', type: 'symbol', source: 'desert-gaps',
+    slot: 'top',
     layout: { 'text-field': ['concat', 'DESERT\n', ['get', 'nearest_city']], 'text-size': 10, 'text-anchor': 'center' },
     paint: { 'text-color': '#FF5252', 'text-halo-color': '#000', 'text-halo-width': 1 },
   });
@@ -351,7 +336,8 @@ function showDetail(props: any, lngLat: any): void {
 
   $('detail-card').classList.add('show');
 
-  const coords = lngLat ? [lngLat.lng, lngLat.lat] : (props.coords || [0, 0]);
+  const coords: [number, number] = lngLat ? [lngLat.lng, lngLat.lat] : (props.coords || [0, 0]);
+  currentFacilityCoords = coords;
   add3DHospitalModel(coords, props.name || 'Hospital');
   narrateFacility(props);
 }
@@ -382,9 +368,6 @@ function toggleLayer(name: string): void {
     case 'heatmap':
       map.setLayoutProperty('layer-heatmap', 'visibility', on ? 'visible' : 'none');
       $('heatmap-legend').classList.toggle('show', on);
-      break;
-    case 'buildings':
-      map.setLayoutProperty('layer-buildings', 'visibility', on ? 'visible' : 'none');
       break;
     case 'deserts':
       if (map.getLayer('desert-circles')) {
@@ -669,6 +652,11 @@ async function toggleFullscreen(): Promise<void> {
 // EVENT LISTENERS
 // ═══════════════════════════════════════════════════════════════
 $('btn-close-detail').addEventListener('click', closeDetail);
+$('btn-recenter').addEventListener('click', () => {
+  if (currentFacilityCoords && map) {
+    map.flyTo({ center: currentFacilityCoords, zoom: 17, pitch: 60, bearing: -15, duration: 1500 });
+  }
+});
 $('tog-fullscreen').addEventListener('click', toggleFullscreen);
 
 // Layer toggle buttons

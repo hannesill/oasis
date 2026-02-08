@@ -66,12 +66,12 @@
         }
         .nav-pill:hover { background:rgba(255,255,255,0.1); color:var(--t1); transform:translateY(-2px); }
         .detail-card {
-            position:absolute; bottom:56px; left:20px;
+            position:absolute; top:80px; left:20px;
             width:320px; z-index:1000;
             display:none; overflow:hidden;
         }
-        .detail-card.show { display:block; animation:slideUp 0.3s ease; }
-        @keyframes slideUp { from{transform:translateY(12px);opacity:0} to{transform:translateY(0);opacity:1} }
+        .detail-card.show { display:block; animation:slideDown 0.3s ease; }
+        @keyframes slideDown { from{transform:translateY(-12px);opacity:0} to{transform:translateY(0);opacity:1} }
         .detail-header {
             padding:12px 16px; display:flex; justify-content:space-between; align-items:flex-start;
             border-bottom:1px solid var(--glass-border);
@@ -83,12 +83,13 @@
             font-size:9px; font-weight:600; color:var(--accent);
             text-transform:uppercase; letter-spacing:0.5px;
         }
-        .close-btn {
+        .detail-actions { display:flex; gap:4px; }
+        .close-btn, .recenter-btn {
             width:24px; height:24px; background:rgba(255,255,255,0.06);
             border:none; border-radius:6px; color:var(--t2); font-size:14px;
             cursor:pointer; display:flex; align-items:center; justify-content:center;
         }
-        .close-btn:hover { background:rgba(255,255,255,0.1); color:var(--t1); }
+        .close-btn:hover, .recenter-btn:hover { background:rgba(255,255,255,0.1); color:var(--t1); }
         .detail-stats {
             padding:10px 16px; display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;
         }
@@ -194,7 +195,10 @@
             <h2 id="d-name">—</h2>
             <span class="type-badge" id="d-type">—</span>
         </div>
-        <button class="close-btn" id="btn-close-detail">✕</button>
+        <div class="detail-actions">
+            <button class="recenter-btn" id="btn-recenter" title="Recenter map">&#8982;</button>
+            <button class="close-btn" id="btn-close-detail">✕</button>
+        </div>
     </div>
     <div class="detail-stats">
         <div class="stat-block"><div class="stat-val" id="d-specs">—</div><div class="stat-lbl">Specialties</div></div>
