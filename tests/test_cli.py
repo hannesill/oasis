@@ -6,7 +6,6 @@ import pytest
 from typer.testing import CliRunner
 
 from oasis.cli import app
-from oasis.core.exceptions import DatasetError
 
 runner = CliRunner()
 
@@ -48,11 +47,11 @@ def test_unknown_command_reports_error():
 def test_init_command_duckdb_custom_path(tmp_path):
     """Test that oasis init --db-path uses custom database path override and DuckDB flow."""
     # Create a temp parquet dir with a dummy file so presence detection works
-    pq_dir = tmp_path / "parquet" / "mimic-iv-demo"
+    pq_dir = tmp_path / "parquet" / "vf-ghana"
     pq_dir.mkdir(parents=True)
     (pq_dir / "test.parquet").touch()
 
-    custom_db_path = tmp_path / "custom_mimic.duckdb"
+    custom_db_path = tmp_path / "custom_vf_ghana.duckdb"
     resolved_custom_db_path = custom_db_path.resolve()
 
     with (
@@ -63,52 +62,21 @@ def test_init_command_duckdb_custom_path(tmp_path):
         patch("oasis.cli.set_active_dataset"),
     ):
         result = runner.invoke(
-            app, ["init", "mimic-iv-demo", "--db-path", str(custom_db_path)]
+            app, ["init", "vf-ghana", "--db-path", str(custom_db_path)]
         )
 
     assert result.exit_code == 0
     # With Rich panels, paths may be split across lines, check for parts of filename
-    # The filename "custom_mimic.duckdb" may be wrapped as "custom_mimi" + "c.duckdb"
-    assert "custom_mimi" in result.stdout and ".duckdb" in result.stdout
+    assert "custom_vf_ghan" in result.stdout and ".duckdb" in result.stdout
     # Now uses "Database:" instead of "DuckDB path:"
     assert "Database:" in result.stdout
 
     # initializer should be called with the resolved path
     mock_init.assert_called_once_with(
-        dataset_name="mimic-iv-demo", db_target_path=resolved_custom_db_path
+        dataset_name="vf-ghana", db_target_path=resolved_custom_db_path
     )
     # verification query should be attempted
     mock_rowcount.assert_called()
-
-
-def test_config_validation_bigquery_with_db_path():
-    """Test that bigquery backend rejects db-path parameter."""
-    result = runner.invoke(
-        app, ["config", "claude", "--backend", "bigquery", "--db-path", "/test/path"]
-    )
-    # should fail when db-path is provided with bigquery
-    assert result.exit_code == 1
-    assert "db-path can only be used with --backend duckdb" in result.output
-
-
-@patch("oasis.cli.get_bigquery_project_id", return_value=None)
-def test_config_validation_bigquery_requires_project_id(mock_get_project):
-    """Test that bigquery backend requires project-id parameter."""
-    result = runner.invoke(app, ["config", "claude", "--backend", "bigquery"])
-    # missing project-id should fail for bigquery backend
-    assert result.exit_code == 1
-    assert "project-id is required when using --backend bigquery" in result.output
-
-
-def test_config_validation_duckdb_with_project_id():
-    """Test that duckdb backend rejects project-id parameter."""
-    result = runner.invoke(
-        app, ["config", "claude", "--backend", "duckdb", "--project-id", "test"]
-    )
-    # should fail when project-id is provided with duckdb
-    assert result.exit_code == 1
-    # Check output - error messages from typer usually go to stdout
-    assert "project-id can only be used with --backend bigquery" in result.output
 
 
 @patch("subprocess.run")
@@ -182,7 +150,7 @@ def test_config_claude_infers_db_path_demo(
 def test_config_claude_infers_db_path_full(
     mock_active, mock_get_default, mock_backend, mock_subprocess
 ):
-    mock_active.return_value = "mimic-iv"
+    mock_active.return_value = "vf-ghana"
     mock_get_default.return_value = Path("/tmp/inferred-full.duckdb")
     mock_subprocess.return_value = MagicMock(returncode=0)
 
@@ -197,452 +165,39 @@ def test_config_claude_infers_db_path_full(
 @patch("oasis.cli.detect_available_local_datasets")
 def test_use_full_happy_path(mock_detect, mock_set_active):
     mock_detect.return_value = {
-        "mimic-iv-demo": {
-            "parquet_present": False,
-            "db_present": False,
-            "parquet_root": "/tmp/demo",
-            "db_path": "/tmp/demo.duckdb",
-        },
-        "mimic-iv": {
+        "vf-ghana": {
             "parquet_present": True,
-            "db_present": False,
-            "parquet_root": "/tmp/full",
-            "db_path": "/tmp/full.duckdb",
+            "db_present": True,
+            "parquet_root": "/tmp/vf-ghana",
+            "db_path": "/tmp/vf_ghana.duckdb",
         },
     }
 
-    result = runner.invoke(app, ["use", "mimic-iv"])
+    result = runner.invoke(app, ["use", "vf-ghana"])
     assert result.exit_code == 0
     # Updated format without trailing period
-    assert "Active dataset set to 'mimic-iv'" in result.stdout
-    mock_set_active.assert_called_once_with("mimic-iv")
+    assert "Active dataset set to 'vf-ghana'" in result.stdout
+    mock_set_active.assert_called_once_with("vf-ghana")
 
 
 @patch("oasis.cli.compute_parquet_dir_size", return_value=123)
-@patch("oasis.cli.get_active_dataset", return_value="mimic-iv")
+@patch("oasis.cli.get_active_dataset", return_value="vf-ghana")
 @patch("oasis.cli.detect_available_local_datasets")
 def test_status_happy_path(mock_detect, mock_active, mock_size):
     mock_detect.return_value = {
-        "mimic-iv-demo": {
+        "vf-ghana": {
             "parquet_present": True,
-            "db_present": False,
-            "parquet_root": "/tmp/demo",
-            "db_path": "/tmp/demo.duckdb",
-        },
-        "mimic-iv": {
-            "parquet_present": True,
-            "db_present": False,
-            "parquet_root": "/tmp/full",
-            "db_path": "/tmp/full.duckdb",
+            "db_present": True,
+            "parquet_root": "/tmp/vf-ghana",
+            "db_path": "/tmp/vf_ghana.duckdb",
         },
     }
 
     result = runner.invoke(app, ["status"])
     assert result.exit_code == 0
     assert "Active dataset:" in result.stdout
-    assert "mimic-iv" in result.stdout
+    assert "vf-ghana" in result.stdout
     # Updated Rich format: "Parquet size:  X.XX GB"
     assert "Parquet size:" in result.stdout
-    # Derived status line should be present
-    assert "Derived:" in result.stdout
 
 
-@patch("oasis.cli.list_materialized_tables")
-@patch("oasis.cli.get_default_database_path")
-@patch("oasis.cli.get_active_backend", return_value="duckdb")
-@patch("oasis.cli.get_active_dataset", return_value="mimic-iv")
-def test_status_derived_flag(
-    mock_active, mock_backend, mock_db_path, mock_mat, tmp_path
-):
-    """Test oasis status --derived shows grouped category listing."""
-    db_file = tmp_path / "mimic_iv.duckdb"
-    db_file.touch()
-    mock_db_path.return_value = db_file
-    mock_mat.return_value = {"sofa", "sepsis3", "age"}
-
-    result = runner.invoke(app, ["status", "--derived"])
-    assert result.exit_code == 0
-    assert "Derived tables for mimic-iv" in result.stdout
-    assert "materialized" in result.stdout
-
-
-@patch("oasis.cli.get_active_backend", return_value="duckdb")
-@patch("oasis.cli.get_active_dataset", return_value="mimic-iv-demo")
-def test_status_derived_flag_unsupported_dataset(mock_active, mock_backend):
-    """Test --derived with a dataset that has no derived support."""
-    result = runner.invoke(app, ["status", "--derived"])
-    assert result.exit_code == 0
-    assert "not available" in result.stdout
-
-
-@patch("oasis.cli.get_active_dataset", return_value=None)
-def test_status_derived_flag_no_active_dataset(mock_active):
-    """Test --derived with no active dataset set."""
-    result = runner.invoke(app, ["status", "--derived"])
-    assert result.exit_code == 0
-    assert "No active dataset" in result.stdout
-
-
-# ----------------------------------------------------------------
-# Backend command tests
-# ----------------------------------------------------------------
-
-
-@patch("oasis.cli.set_active_backend")
-def test_backend_duckdb_happy_path(mock_set_backend):
-    """Test setting backend to duckdb."""
-    result = runner.invoke(app, ["backend", "duckdb"])
-
-    assert result.exit_code == 0
-    assert "Active backend set to 'duckdb'" in result.stdout
-    mock_set_backend.assert_called_once_with("duckdb")
-
-
-@patch("oasis.cli.get_bigquery_project_id", return_value="my-project")
-@patch("oasis.cli.set_active_backend")
-@patch("oasis.cli.get_active_dataset")
-@patch("oasis.cli.DatasetRegistry.get")
-def test_backend_bigquery_happy_path(
-    mock_registry, mock_get_dataset, mock_set_backend, mock_get_project
-):
-    """Test setting backend to bigquery."""
-    # Mock a dataset that supports BigQuery
-    mock_get_dataset.return_value = "mimic-iv"
-    mock_ds = MagicMock()
-    mock_ds.bigquery_dataset_ids = ["mimiciv_hosp"]
-    mock_registry.return_value = mock_ds
-
-    result = runner.invoke(app, ["backend", "bigquery"])
-
-    assert result.exit_code == 0
-    assert "Active backend set to 'bigquery'" in result.stdout
-    assert "BigQuery requires valid Google Cloud credentials" in result.stdout
-    mock_set_backend.assert_called_once_with("bigquery")
-
-
-@patch("oasis.cli.set_active_backend")
-@patch("oasis.cli.get_active_dataset")
-@patch("oasis.cli.DatasetRegistry.get")
-def test_backend_bigquery_blocks_unsupported_dataset(
-    mock_registry, mock_get_dataset, mock_set_backend
-):
-    """Test that switching to bigquery is blocked when dataset doesn't support BQ."""
-    # Mock a dataset that doesn't support BigQuery
-    mock_get_dataset.return_value = "custom-dataset"
-    mock_ds = MagicMock()
-    mock_ds.bigquery_dataset_ids = []  # No BigQuery support
-    mock_registry.return_value = mock_ds
-
-    result = runner.invoke(app, ["backend", "bigquery"])
-
-    assert result.exit_code == 1
-    assert "Dataset Incompatible" in result.stdout
-    assert "not available on BigQuery" in result.stdout
-    mock_set_backend.assert_not_called()
-
-
-def test_backend_invalid_choice():
-    """Test that invalid backend choice fails with helpful message."""
-    result = runner.invoke(app, ["backend", "mysql"])
-
-    assert result.exit_code == 1
-    assert "Invalid Backend" in result.stdout
-    assert "mysql" in result.stdout
-    assert "bigquery" in result.stdout
-    assert "duckdb" in result.stdout
-
-
-@patch("oasis.cli.get_bigquery_project_id", return_value="my-project")
-@patch("oasis.cli.set_active_backend")
-@patch("oasis.cli.get_active_dataset", side_effect=DatasetError("No active dataset"))
-def test_backend_case_insensitive(mock_get_dataset, mock_set_backend, mock_get_project):
-    """Test that backend choice is case-insensitive."""
-    result = runner.invoke(app, ["backend", "BIGQUERY"])
-
-    assert result.exit_code == 0
-    mock_set_backend.assert_called_once_with("bigquery")
-
-
-@patch("oasis.cli.set_active_backend")
-def test_backend_duckdb_shows_init_hint(mock_set_backend):
-    """Test that duckdb backend shows initialization hint."""
-    result = runner.invoke(app, ["backend", "duckdb"])
-
-    assert result.exit_code == 0
-    assert "DuckDB uses local database files" in result.stdout
-    assert "oasis init" in result.stdout
-
-
-# ----------------------------------------------------------------
-# Init command: derived table skip/force behavior
-# ----------------------------------------------------------------
-
-
-class TestInitDerivedTableSkipForce:
-    """Tests for derived table skip/force behavior at the end of oasis init.
-
-    These tests mock the entire init pipeline to focus on the derived-table
-    section, which only runs for mimic-iv on the duckdb backend.
-    """
-
-    def _invoke_init(self, tmp_path, *, force=False, derived_count=0, input_text=None):
-        """Helper that mocks the full init pipeline and invokes oasis init mimic-iv.
-
-        Returns the CliRunner result and the mock for materialize_all.
-        """
-        pq_dir = tmp_path / "parquet" / "mimic-iv"
-        pq_dir.mkdir(parents=True)
-        (pq_dir / "test.parquet").touch()
-
-        db_file = tmp_path / "mimic_iv.duckdb"
-        db_file.touch()
-
-        args = ["init", "mimic-iv"]
-        if force:
-            args.append("--force")
-
-        with (
-            patch("oasis.config._find_project_root_from_cwd", return_value=Path.cwd()),
-            patch("oasis.cli.get_dataset_parquet_root", return_value=pq_dir),
-            patch("oasis.cli.get_default_database_path", return_value=db_file),
-            patch("oasis.cli.init_duckdb_from_parquet", return_value=True),
-            patch("oasis.cli.verify_table_rowcount", return_value=100),
-            patch("oasis.cli.set_active_dataset"),
-            patch("oasis.cli.get_active_backend", return_value="duckdb"),
-            patch("oasis.cli.get_derived_table_count", return_value=derived_count),
-            patch("oasis.cli.materialize_all") as mock_materialize,
-        ):
-            mock_materialize.return_value = ["sofa", "sepsis3", "age"]
-            result = runner.invoke(app, args, input=input_text)
-            return result, mock_materialize
-
-    def test_skips_prompt_when_derived_exist(self, tmp_path):
-        """When derived tables exist and no --force, skip prompt and notify."""
-        result, mock_materialize = self._invoke_init(tmp_path, derived_count=42)
-
-        assert result.exit_code == 0
-        assert "already materialized" in result.stdout
-        assert "42 tables" in result.stdout
-        mock_materialize.assert_not_called()
-
-    def test_force_rematerializes_without_prompt(self, tmp_path):
-        """When --force and derived tables exist, rematerialize without prompt."""
-        result, mock_materialize = self._invoke_init(
-            tmp_path, force=True, derived_count=42
-        )
-
-        assert result.exit_code == 0
-        mock_materialize.assert_called_once()
-
-    def test_prompts_when_no_derived_exist(self, tmp_path):
-        """When no derived tables exist, prompt the user (answer no)."""
-        result, mock_materialize = self._invoke_init(
-            tmp_path, derived_count=0, input_text="n\n"
-        )
-
-        assert result.exit_code == 0
-        assert "Materialize derived tables?" in result.stdout
-        mock_materialize.assert_not_called()
-
-    def test_prompts_and_materializes_on_yes(self, tmp_path):
-        """When no derived tables exist and user says yes, materialize."""
-        result, mock_materialize = self._invoke_init(
-            tmp_path, derived_count=0, input_text="y\n"
-        )
-
-        assert result.exit_code == 0
-        mock_materialize.assert_called_once()
-
-
-# ----------------------------------------------------------------
-# Backend command: --project-id tests
-# ----------------------------------------------------------------
-
-
-@patch("oasis.cli.set_bigquery_project_id")
-@patch("oasis.cli.set_active_backend")
-@patch("oasis.cli.get_active_dataset", side_effect=DatasetError("No active dataset"))
-def test_backend_bigquery_with_project_id(
-    mock_get_dataset, mock_set_backend, mock_set_project
-):
-    """Test backend bigquery --project-id persists project ID."""
-    result = runner.invoke(
-        app, ["backend", "bigquery", "--project-id", "my-gcp-project"]
-    )
-
-    assert result.exit_code == 0
-    assert "Active backend set to 'bigquery'" in result.stdout
-    mock_set_backend.assert_called_once_with("bigquery")
-    mock_set_project.assert_called_once_with("my-gcp-project")
-
-
-@patch("oasis.cli.set_bigquery_project_id")
-@patch("oasis.cli.set_active_backend")
-def test_backend_duckdb_rejects_project_id(mock_set_backend, mock_set_project):
-    """Test backend duckdb --project-id is rejected."""
-    result = runner.invoke(app, ["backend", "duckdb", "--project-id", "my-gcp-project"])
-
-    assert result.exit_code == 1
-    assert "project-id can only be used with bigquery" in result.output
-    mock_set_backend.assert_not_called()
-    mock_set_project.assert_not_called()
-
-
-@patch("oasis.cli.get_bigquery_project_id", return_value=None)
-@patch("oasis.cli.set_bigquery_project_id")
-@patch("oasis.cli.set_active_backend")
-@patch("oasis.cli.get_active_dataset", side_effect=DatasetError("No active dataset"))
-def test_backend_bigquery_without_project_id_errors(
-    mock_get_dataset, mock_set_backend, mock_set_project, mock_get_project
-):
-    """Test backend bigquery without --project-id and no config project ID errors."""
-    result = runner.invoke(app, ["backend", "bigquery"])
-
-    assert result.exit_code == 1
-    assert "Project ID Required" in result.stdout
-    assert "oasis backend bigquery --project-id" in result.stdout
-    mock_set_backend.assert_not_called()
-    mock_set_project.assert_not_called()
-
-
-@patch("oasis.cli.get_bigquery_project_id", return_value="existing-project")
-@patch("oasis.cli.set_bigquery_project_id")
-@patch("oasis.cli.set_active_backend")
-@patch("oasis.cli.get_active_dataset", side_effect=DatasetError("No active dataset"))
-def test_backend_bigquery_without_flag_uses_config_project_id(
-    mock_get_dataset, mock_set_backend, mock_set_project, mock_get_project
-):
-    """Test backend bigquery without --project-id succeeds when project ID is in config."""
-    result = runner.invoke(app, ["backend", "bigquery"])
-
-    assert result.exit_code == 0
-    mock_set_backend.assert_called_once_with("bigquery")
-    mock_set_project.assert_not_called()
-
-
-# ----------------------------------------------------------------
-# Config command: persistence to config.json tests
-# ----------------------------------------------------------------
-
-
-@patch("subprocess.run")
-@patch("oasis.cli.set_bigquery_project_id")
-@patch("oasis.cli.set_active_backend")
-def test_config_claude_bigquery_persists_to_config(
-    mock_set_backend, mock_set_project, mock_subprocess
-):
-    """Test that oasis config claude --backend bigquery persists backend and project_id."""
-    mock_subprocess.return_value = MagicMock(returncode=0)
-
-    result = runner.invoke(
-        app,
-        ["config", "claude", "--backend", "bigquery", "--project-id", "my-project"],
-    )
-
-    assert result.exit_code == 0
-    mock_set_backend.assert_called_once_with("bigquery")
-    mock_set_project.assert_called_once_with("my-project")
-
-
-@patch("subprocess.run")
-@patch("oasis.cli.get_active_backend", return_value="duckdb")
-@patch("oasis.cli.set_bigquery_project_id")
-@patch("oasis.cli.set_active_backend")
-def test_config_claude_without_backend_flag_does_not_overwrite(
-    mock_set_backend, mock_set_project, mock_get_backend, mock_subprocess
-):
-    """Test that oasis config claude without --backend does not overwrite the active backend."""
-    mock_subprocess.return_value = MagicMock(returncode=0)
-
-    result = runner.invoke(app, ["config", "claude"])
-
-    assert result.exit_code == 0
-    mock_set_backend.assert_not_called()
-    mock_set_project.assert_not_called()
-
-
-@patch("subprocess.run")
-@patch("oasis.cli.get_bigquery_project_id", return_value="inferred-project")
-@patch("oasis.cli.get_active_backend", return_value="bigquery")
-def test_config_claude_infers_bigquery_project_from_config(
-    mock_backend, mock_get_project, mock_subprocess
-):
-    """Test that oasis config claude infers project-id from config.json when backend is bigquery."""
-    mock_subprocess.return_value = MagicMock(returncode=0)
-
-    result = runner.invoke(app, ["config", "claude"])
-
-    assert result.exit_code == 0
-    # Verify the setup script was called with --backend bigquery and --project-id
-    call_args = mock_subprocess.call_args[0][0]
-    assert "--backend" in call_args
-    assert "bigquery" in call_args
-    assert "--project-id" in call_args
-    assert "inferred-project" in call_args
-
-
-@patch("oasis.cli.get_bigquery_project_id", return_value=None)
-@patch("oasis.cli.get_active_backend", return_value="bigquery")
-def test_config_claude_errors_when_bigquery_no_project_in_config(
-    mock_backend, mock_get_project
-):
-    """Test that oasis config claude errors when backend is bigquery but no project-id anywhere."""
-    result = runner.invoke(app, ["config", "claude"])
-
-    assert result.exit_code == 1
-    assert "BigQuery backend requires a project ID" in result.output
-
-
-@patch("subprocess.run")
-@patch("oasis.cli.set_bigquery_project_id")
-@patch("oasis.cli.set_active_backend")
-def test_config_universal_bigquery_persists_to_config(
-    mock_set_backend, mock_set_project, mock_subprocess
-):
-    """Test that oasis config --quick --backend bigquery persists to config.json."""
-    mock_subprocess.return_value = MagicMock(returncode=0)
-
-    result = runner.invoke(
-        app,
-        [
-            "config",
-            "--quick",
-            "--backend",
-            "bigquery",
-            "--project-id",
-            "my-project",
-        ],
-    )
-
-    assert result.exit_code == 0
-    mock_set_backend.assert_called_once_with("bigquery")
-    mock_set_project.assert_called_once_with("my-project")
-
-
-# ----------------------------------------------------------------
-# Status command: BigQuery project ID display
-# ----------------------------------------------------------------
-
-
-@patch("oasis.cli.get_bigquery_project_id", return_value="my-gcp-project")
-@patch("oasis.cli.get_active_backend", return_value="bigquery")
-@patch("oasis.cli.compute_parquet_dir_size", return_value=123)
-@patch("oasis.cli.get_active_dataset", return_value="mimic-iv")
-@patch("oasis.cli.detect_available_local_datasets")
-def test_status_bigquery_shows_project_id(
-    mock_detect, mock_active, mock_size, mock_backend, mock_get_project
-):
-    """Test that oasis status shows BigQuery project ID in parentheses."""
-    mock_detect.return_value = {
-        "mimic-iv": {
-            "parquet_present": True,
-            "db_present": False,
-            "parquet_root": "/tmp/full",
-            "db_path": "/tmp/full.duckdb",
-        },
-    }
-
-    result = runner.invoke(app, ["status"])
-    assert result.exit_code == 0
-    assert "bigquery" in result.stdout
-    assert "my-gcp-project" in result.stdout

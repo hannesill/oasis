@@ -29,44 +29,27 @@ def integration_env(tmp_path):
     """Full stack test environment with real DuckDB.
 
     Creates a temp DuckDB database with schema-qualified tables
-    matching the MIMIC-IV demo structure.
+    matching the VF Ghana structure.
     """
     db_path = tmp_path / "integration_test.duckdb"
     con = duckdb.connect(str(db_path))
     try:
-        # Create mimiciv_hosp schema with patients table
-        con.execute("CREATE SCHEMA mimiciv_hosp")
+        # Create vf schema with facilities table
+        con.execute("CREATE SCHEMA vf")
         con.execute("""
-            CREATE TABLE mimiciv_hosp.patients (
-                subject_id INTEGER PRIMARY KEY,
-                gender VARCHAR,
-                anchor_age INTEGER,
-                anchor_year INTEGER,
-                dod TIMESTAMP
+            CREATE TABLE vf.facilities (
+                pk_unique_id INTEGER PRIMARY KEY,
+                name VARCHAR,
+                region VARCHAR,
+                number_beds INTEGER,
+                specialties VARCHAR
             )
         """)
         con.execute("""
-            INSERT INTO mimiciv_hosp.patients VALUES
-                (10000032, 'M', 52, 2180, NULL),
-                (10000033, 'F', 67, 2175, '2175-08-09'),
-                (10000034, 'M', 45, 2160, NULL)
-        """)
-
-        # Create mimiciv_icu schema with icustays table
-        con.execute("CREATE SCHEMA mimiciv_icu")
-        con.execute("""
-            CREATE TABLE mimiciv_icu.icustays (
-                subject_id INTEGER,
-                hadm_id INTEGER,
-                stay_id INTEGER,
-                intime TIMESTAMP,
-                outtime TIMESTAMP
-            )
-        """)
-        con.execute("""
-            INSERT INTO mimiciv_icu.icustays VALUES
-                (10000032, 20000001, 30000001, '2180-07-23 15:00:00', '2180-07-24 12:00:00'),
-                (10000033, 20000002, 30000002, '2180-08-15 10:30:00', '2180-08-16 14:15:00')
+            INSERT INTO vf.facilities VALUES
+                (1, 'Tamale Teaching Hospital', 'Northern', 200, 'Surgery'),
+                (2, 'Korle Bu Teaching Hospital', 'Greater Accra', 1600, 'Cardiology'),
+                (3, 'Ridge Hospital', 'Greater Accra', 420, 'General Medicine')
         """)
         con.commit()
     finally:
@@ -75,7 +58,7 @@ def integration_env(tmp_path):
     dataset = DatasetDefinition(
         name="integration-test",
         modalities=frozenset({Modality.TABULAR}),
-        schema_mapping={"hosp": "mimiciv_hosp", "icu": "mimiciv_icu"},
+        schema_mapping={"": "vf"},
     )
 
     backend = DuckDBBackend(db_path_override=str(db_path))
@@ -95,7 +78,7 @@ class TestEndToEnd:
             result = tool.invoke(
                 dataset,
                 ExecuteQueryInput(
-                    sql_query="SELECT COUNT(*) as cnt FROM mimiciv_hosp.patients"
+                    sql_query="SELECT COUNT(*) as cnt FROM vf.facilities"
                 ),
             )
 
@@ -114,8 +97,7 @@ class TestEndToEnd:
         assert isinstance(result, dict)
         assert "tables" in result
         tables = result["tables"]
-        assert "mimiciv_hosp.patients" in tables
-        assert "mimiciv_icu.icustays" in tables
+        assert "vf.facilities" in tables
 
     def test_get_table_info_full_stack(self, integration_env):
         """GetTableInfoTool returns schema and sample data for a real table."""
@@ -125,7 +107,7 @@ class TestEndToEnd:
         with patch("oasis.core.tools.tabular.get_backend", return_value=backend):
             result = tool.invoke(
                 dataset,
-                GetTableInfoInput(table_name="mimiciv_hosp.patients"),
+                GetTableInfoInput(table_name="vf.facilities"),
             )
 
         assert isinstance(result, dict)
@@ -134,10 +116,10 @@ class TestEndToEnd:
         schema = result["schema"]
         assert isinstance(schema, pd.DataFrame)
         column_names = schema["name"].tolist()
-        assert "subject_id" in column_names
-        assert "gender" in column_names
+        assert "pk_unique_id" in column_names
+        assert "name" in column_names
 
-        # Sample should be a DataFrame with actual patient data
+        # Sample should be a DataFrame with actual facility data
         sample = result["sample"]
         assert isinstance(sample, pd.DataFrame)
         assert len(sample) > 0
@@ -167,29 +149,8 @@ class TestEndToEnd:
             with pytest.raises(SecurityError):
                 tool.invoke(
                     dataset,
-                    ExecuteQueryInput(sql_query="DROP TABLE patients"),
+                    ExecuteQueryInput(sql_query="DROP TABLE facilities"),
                 )
-
-    def test_execute_query_with_join(self, integration_env):
-        """ExecuteQueryTool handles JOIN queries across schemas."""
-        dataset, backend, db_path = integration_env
-
-        tool = ExecuteQueryTool()
-        sql = """
-            SELECT p.subject_id, p.gender, i.stay_id, i.intime
-            FROM mimiciv_hosp.patients p
-            JOIN mimiciv_icu.icustays i ON p.subject_id = i.subject_id
-            ORDER BY p.subject_id
-        """
-        with patch("oasis.core.tools.tabular.get_backend", return_value=backend):
-            result = tool.invoke(dataset, ExecuteQueryInput(sql_query=sql))
-
-        assert isinstance(result, pd.DataFrame)
-        assert len(result) == 2  # Two patients have ICU stays
-        assert "subject_id" in result.columns
-        assert "gender" in result.columns
-        assert "stay_id" in result.columns
-        assert "intime" in result.columns
 
     def test_execute_query_with_aggregation(self, integration_env):
         """ExecuteQueryTool handles GROUP BY aggregation queries."""
@@ -197,25 +158,25 @@ class TestEndToEnd:
 
         tool = ExecuteQueryTool()
         sql = (
-            "SELECT gender, COUNT(*) as cnt FROM mimiciv_hosp.patients GROUP BY gender"
+            "SELECT region, COUNT(*) as cnt FROM vf.facilities GROUP BY region"
         )
         with patch("oasis.core.tools.tabular.get_backend", return_value=backend):
             result = tool.invoke(dataset, ExecuteQueryInput(sql_query=sql))
 
         assert isinstance(result, pd.DataFrame)
-        assert "gender" in result.columns
+        assert "region" in result.columns
         assert "cnt" in result.columns
-        # 2 males, 1 female
-        gender_counts = dict(zip(result["gender"], result["cnt"]))
-        assert gender_counts["M"] == 2
-        assert gender_counts["F"] == 1
+        # 1 in Northern, 2 in Greater Accra
+        region_counts = dict(zip(result["region"], result["cnt"]))
+        assert region_counts["Northern"] == 1
+        assert region_counts["Greater Accra"] == 2
 
     def test_execute_query_empty_result(self, integration_env):
         """ExecuteQueryTool returns empty DataFrame for no-match queries."""
         dataset, backend, db_path = integration_env
 
         tool = ExecuteQueryTool()
-        sql = "SELECT * FROM mimiciv_hosp.patients WHERE subject_id = -1"
+        sql = "SELECT * FROM vf.facilities WHERE pk_unique_id = -1"
         with patch("oasis.core.tools.tabular.get_backend", return_value=backend):
             result = tool.invoke(dataset, ExecuteQueryInput(sql_query=sql))
 

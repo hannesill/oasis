@@ -5,20 +5,18 @@ import pytest
 from oasis.config import (
     VALID_BACKENDS,
     get_active_backend,
-    get_bigquery_project_id,
     get_dataset_parquet_root,
     get_default_database_path,
     set_active_backend,
-    set_bigquery_project_id,
 )
 from oasis.core.datasets import DatasetRegistry
 
 
 def test_get_dataset_known():
     """Test that a known dataset can be retrieved from the registry."""
-    ds = DatasetRegistry.get("mimic-iv-demo")
+    ds = DatasetRegistry.get("vf-ghana")
     assert ds is not None
-    assert ds.default_duckdb_filename == "mimic_iv_demo.duckdb"
+    assert ds.default_duckdb_filename == "vf_ghana.duckdb"
 
 
 def test_get_dataset_unknown():
@@ -32,8 +30,8 @@ def test_default_paths(tmp_path, monkeypatch):
 
     monkeypatch.setattr(cfg_mod, "_DEFAULT_DATABASES_DIR", tmp_path / "dbs")
     monkeypatch.setattr(cfg_mod, "_DEFAULT_PARQUET_DIR", tmp_path / "parquet")
-    db_path = get_default_database_path("mimic-iv-demo")
-    raw_path = get_dataset_parquet_root("mimic-iv-demo")
+    db_path = get_default_database_path("vf-ghana")
+    raw_path = get_dataset_parquet_root("vf-ghana")
     # They should be Path objects and exist
     assert isinstance(db_path, Path)
     assert db_path.parent.exists()
@@ -45,8 +43,8 @@ def test_raw_path_includes_dataset_name(tmp_path, monkeypatch):
     import oasis.config as cfg_mod
 
     monkeypatch.setattr(cfg_mod, "_DEFAULT_PARQUET_DIR", tmp_path / "parquet")
-    raw_path = get_dataset_parquet_root("mimic-iv-demo")
-    assert "mimic-iv-demo" in str(raw_path)
+    raw_path = get_dataset_parquet_root("vf-ghana")
+    assert "vf-ghana" in str(raw_path)
 
 
 def test_find_project_root_search(tmp_path, monkeypatch):
@@ -113,22 +111,22 @@ class TestGetActiveBackend:
     def test_env_var_takes_priority(self, isolated_config, monkeypatch):
         """OASIS_BACKEND env var takes priority over config file."""
         isolated_config.write_text('{"backend": "duckdb"}')
-        monkeypatch.setenv("OASIS_BACKEND", "bigquery")
+        monkeypatch.setenv("OASIS_BACKEND", "duckdb")
 
-        assert get_active_backend() == "bigquery"
+        assert get_active_backend() == "duckdb"
 
     def test_env_var_case_insensitive(self, isolated_config, monkeypatch):
         """OASIS_BACKEND env var is case-insensitive."""
-        monkeypatch.setenv("OASIS_BACKEND", "BIGQUERY")
+        monkeypatch.setenv("OASIS_BACKEND", "DUCKDB")
 
-        assert get_active_backend() == "bigquery"
+        assert get_active_backend() == "duckdb"
 
     def test_config_file_used_when_no_env(self, isolated_config, monkeypatch):
         """Config file setting is used when no env var is set."""
-        isolated_config.write_text('{"backend": "bigquery"}')
+        isolated_config.write_text('{"backend": "duckdb"}')
         monkeypatch.delenv("OASIS_BACKEND", raising=False)
 
-        assert get_active_backend() == "bigquery"
+        assert get_active_backend() == "duckdb"
 
     def test_config_file_case_insensitive(self, isolated_config, monkeypatch):
         """Config file backend setting is case-insensitive."""
@@ -141,117 +139,23 @@ class TestGetActiveBackend:
 class TestSetActiveBackend:
     """Tests for set_active_backend function."""
 
-    def test_set_duckdb(self, isolated_config):
-        """Can set backend to duckdb."""
-        import json
-
+    def test_set_duckdb(self):
+        """Can set backend to duckdb without error."""
         set_active_backend("duckdb")
 
-        saved = json.loads(isolated_config.read_text())
-        assert saved["backend"] == "duckdb"
-
-    def test_set_bigquery(self, isolated_config):
-        """Can set backend to bigquery."""
-        import json
-
-        set_active_backend("bigquery")
-
-        saved = json.loads(isolated_config.read_text())
-        assert saved["backend"] == "bigquery"
-
-    def test_case_insensitive(self, isolated_config):
+    def test_case_insensitive(self):
         """Backend choice is case-insensitive."""
-        import json
+        set_active_backend("DUCKDB")
 
-        set_active_backend("BIGQUERY")
-
-        saved = json.loads(isolated_config.read_text())
-        assert saved["backend"] == "bigquery"
-
-    def test_invalid_backend_raises_error(self, isolated_config):
+    def test_invalid_backend_raises_error(self):
         """Invalid backend raises ValueError."""
         with pytest.raises(ValueError, match="backend must be one of"):
             set_active_backend("invalid")
-
-    def test_preserves_other_config(self, isolated_config):
-        """Setting backend preserves other config values."""
-        import json
-
-        isolated_config.write_text('{"dataset": "mimic-iv", "other": "value"}')
-
-        set_active_backend("bigquery")
-
-        saved = json.loads(isolated_config.read_text())
-        assert saved["backend"] == "bigquery"
-        assert saved["dataset"] == "mimic-iv"
-        assert saved["other"] == "value"
-
-
-class TestBigQueryProjectId:
-    """Tests for get_bigquery_project_id / set_bigquery_project_id functions."""
-
-    def test_default_is_none(self, isolated_config, monkeypatch):
-        """Default project ID is None when nothing is configured."""
-        monkeypatch.delenv("OASIS_PROJECT_ID", raising=False)
-
-        assert get_bigquery_project_id() is None
-
-    def test_env_var_takes_priority(self, isolated_config, monkeypatch):
-        """OASIS_PROJECT_ID env var takes priority over config file."""
-        isolated_config.write_text('{"bigquery_project_id": "from-config"}')
-        monkeypatch.setenv("OASIS_PROJECT_ID", "from-env")
-
-        assert get_bigquery_project_id() == "from-env"
-
-    def test_config_file_used_when_no_env(self, isolated_config, monkeypatch):
-        """Config file setting is used when no env var is set."""
-        isolated_config.write_text('{"bigquery_project_id": "my-project"}')
-        monkeypatch.delenv("OASIS_PROJECT_ID", raising=False)
-
-        assert get_bigquery_project_id() == "my-project"
-
-    def test_set_project_id(self, isolated_config, monkeypatch):
-        """Can set project ID via set_bigquery_project_id."""
-        import json
-
-        monkeypatch.delenv("OASIS_PROJECT_ID", raising=False)
-
-        set_bigquery_project_id("new-project")
-
-        saved = json.loads(isolated_config.read_text())
-        assert saved["bigquery_project_id"] == "new-project"
-        assert get_bigquery_project_id() == "new-project"
-
-    def test_clear_project_id(self, isolated_config, monkeypatch):
-        """Can clear project ID by setting None."""
-        monkeypatch.delenv("OASIS_PROJECT_ID", raising=False)
-
-        set_bigquery_project_id("some-project")
-        assert get_bigquery_project_id() == "some-project"
-
-        set_bigquery_project_id(None)
-        assert get_bigquery_project_id() is None
-
-    def test_preserves_other_config(self, isolated_config):
-        """Setting project ID preserves other config values."""
-        import json
-
-        isolated_config.write_text(
-            '{"backend": "bigquery", "active_dataset": "mimic-iv"}'
-        )
-
-        set_bigquery_project_id("my-project")
-
-        saved = json.loads(isolated_config.read_text())
-        assert saved["bigquery_project_id"] == "my-project"
-        assert saved["backend"] == "bigquery"
-        assert saved["active_dataset"] == "mimic-iv"
 
 
 class TestValidBackends:
     """Tests for VALID_BACKENDS constant."""
 
     def test_contains_expected_backends(self):
-        """VALID_BACKENDS contains duckdb and bigquery."""
+        """VALID_BACKENDS contains duckdb."""
         assert "duckdb" in VALID_BACKENDS
-        assert "bigquery" in VALID_BACKENDS

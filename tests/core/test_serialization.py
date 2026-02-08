@@ -110,12 +110,12 @@ class TestSerializeList:
         """
         pytest.importorskip("tabulate")
         items = [
-            {"name": "patients", "rows": 100},
-            {"name": "admissions", "rows": 200},
+            {"name": "facilities", "rows": 100},
+            {"name": "regions", "rows": 200},
         ]
         result = serialize_for_mcp(items)
-        assert "patients" in result
-        assert "admissions" in result
+        assert "facilities" in result
+        assert "regions" in result
         assert "100" in result
 
     def test_list_of_integers(self):
@@ -146,16 +146,16 @@ class TestSerializeDict:
     def test_nested_dict(self):
         """Nested dict indents sub-keys."""
         data = {
-            "dataset": {"name": "mimic-iv", "version": "2.2"},
+            "dataset": {"name": "vf-ghana", "version": "1.0"},
         }
         result = serialize_for_mcp(data)
         assert "**dataset:**" in result
-        assert "name: mimic-iv" in result
-        assert "version: 2.2" in result
+        assert "name: vf-ghana" in result
+        assert "version: 1.0" in result
 
     def test_dict_with_list_value(self):
         """Dict with list value joins list items."""
-        data = {"tables": ["patients", "admissions"]}
+        data = {"tables": ["facilities", "regions"]}
         result = serialize_for_mcp(data)
-        assert "patients" in result
-        assert "admissions" in result
+        assert "facilities" in result
+        assert "regions" in result

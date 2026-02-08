@@ -28,18 +28,18 @@ class DuckDBBackend:
 
     Example:
         backend = DuckDBBackend()
-        mimic_demo = DatasetRegistry.get("mimic-iv-demo")
+        vf_ghana = DatasetRegistry.get("vf-ghana")
 
         # Execute a query
         result = backend.execute_query(
-            "SELECT * FROM mimiciv_hosp.patients LIMIT 5",
-            mimic_demo
+            "SELECT * FROM vf.facilities LIMIT 5",
+            vf_ghana
         )
         print(result.data)
 
         # Get table list (returns schema-qualified names)
-        tables = backend.get_table_list(mimic_demo)
-        # e.g. ["mimiciv_hosp.admissions", "mimiciv_hosp.patients", ...]
+        tables = backend.get_table_list(vf_ghana)
+        # e.g. ["vf.facilities"]
     """
 
     def __init__(self, db_path_override: str | Path | None = None):
@@ -180,7 +180,7 @@ class DuckDBBackend:
     def get_table_list(self, dataset: DatasetDefinition) -> list[str]:
         """Get list of available tables in the dataset.
 
-        Returns schema-qualified names (e.g. ``mimiciv_hosp.patients``) when
+        Returns schema-qualified names (e.g. ``vf.facilities``) when
         the database contains non-system schemas.  Falls back to unqualified
         names from the ``main`` schema for backward compatibility with custom
         datasets that have no schema mapping.
@@ -226,8 +226,8 @@ class DuckDBBackend:
     ) -> QueryResult:
         """Get schema information for a specific table.
 
-        Supports both schema-qualified names (``mimiciv_hosp.patients``) and
-        simple names (``patients``).  Schema-qualified names use
+        Supports both schema-qualified names (``vf.facilities``) and
+        simple names (``facilities``).  Schema-qualified names use
         ``information_schema.columns``; simple names use ``PRAGMA table_info``.
 
         Args:
@@ -287,8 +287,8 @@ class DuckDBBackend:
     ) -> QueryResult:
         """Get sample rows from a table.
 
-        Supports both schema-qualified names (``mimiciv_hosp.patients``) and
-        simple names (``patients``).
+        Supports both schema-qualified names (``vf.facilities``) and
+        simple names (``facilities``).
 
         Args:
             table_name: Name of the table to sample (may be schema-qualified)

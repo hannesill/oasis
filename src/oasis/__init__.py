@@ -20,36 +20,29 @@ __version__ = "0.4.2"
 from oasis.api import (
     # Exceptions
     DatasetError,
-    OASISError,
     ModalityError,
+    OASISError,
     QueryError,
     # Tabular data
     execute_query,
     # Dataset management
     get_active_dataset,
-    # Clinical notes
-    get_note,
     get_schema,
     get_table_info,
     list_datasets,
-    list_patient_notes,
-    search_notes,
     set_dataset,
 )
 
 __all__ = [
     "DatasetError",
-    "OASISError",
     "ModalityError",
+    "OASISError",
     "QueryError",
     "__version__",
     "execute_query",
     "get_active_dataset",
-    "get_note",
     "get_schema",
     "get_table_info",
     "list_datasets",
-    "list_patient_notes",
-    "search_notes",
     "set_dataset",
 ]

@@ -142,7 +142,6 @@ def _get_default_runtime_config() -> dict:
         "active_dataset": None,
         "duckdb_paths": {},  # Map dataset_name -> path
         "parquet_roots": {},  # Map dataset_name -> path
-        "bigquery_project_id": None,
     }
 
 
@@ -246,32 +245,15 @@ def set_active_dataset(choice: str) -> None:
     save_runtime_config(cfg)
 
 
-VALID_BACKENDS = {"duckdb", "bigquery"}
+VALID_BACKENDS = {"duckdb"}
 
 
 def get_active_backend() -> str:
     """Get the active backend.
 
-    Priority:
-    1. OASIS_BACKEND environment variable
-    2. Config file setting
-    3. Default to 'duckdb'
-
     Returns:
-        Backend name ('duckdb' or 'bigquery')
+        Backend name (always 'duckdb')
     """
-    # Priority 1: Environment variable
-    env_backend = os.getenv("OASIS_BACKEND")
-    if env_backend:
-        return env_backend.lower()
-
-    # Priority 2: Config file
-    cfg = load_runtime_config()
-    backend = cfg.get("backend")
-    if backend:
-        return backend.lower()
-
-    # Default
     return "duckdb"
 
 
@@ -279,7 +261,7 @@ def set_active_backend(choice: str) -> None:
     """Set the active backend.
 
     Args:
-        choice: Backend name ('duckdb' or 'bigquery')
+        choice: Backend name ('duckdb')
 
     Raises:
         ValueError: If the backend is not valid
@@ -287,46 +269,6 @@ def set_active_backend(choice: str) -> None:
     choice = choice.lower()
     if choice not in VALID_BACKENDS:
         raise ValueError(f"backend must be one of {VALID_BACKENDS}. Got: {choice}")
-
-    cfg = load_runtime_config()
-    cfg["backend"] = choice
-    save_runtime_config(cfg)
-
-
-def get_bigquery_project_id() -> str | None:
-    """Get the BigQuery billing project ID.
-
-    Priority:
-    1. OASIS_PROJECT_ID environment variable
-    2. Config file setting
-    3. None (let BigQuery client use ambient credentials)
-
-    Returns:
-        Project ID string, or None if not configured
-    """
-    # Priority 1: Environment variable
-    env_project_id = os.getenv("OASIS_PROJECT_ID")
-    if env_project_id:
-        return env_project_id
-
-    # Priority 2: Config file
-    cfg = load_runtime_config()
-    project_id = cfg.get("bigquery_project_id")
-    if project_id:
-        return project_id
-
-    return None
-
-
-def set_bigquery_project_id(project_id: str | None) -> None:
-    """Set or clear the BigQuery billing project ID.
-
-    Args:
-        project_id: Project ID string, or None to clear
-    """
-    cfg = load_runtime_config()
-    cfg["bigquery_project_id"] = project_id
-    save_runtime_config(cfg)
 
 
 def get_duckdb_path_for(choice: str) -> Path | None:

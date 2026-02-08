@@ -37,8 +37,7 @@ class Modality(Enum):
     and the LLM's ability to write adaptive SQL.
     """
 
-    TABULAR = auto()  # Structured tables (labs, demographics, vitals, etc.)
-    NOTES = auto()  # Clinical notes and discharge summaries
+    TABULAR = auto()  # Structured tables (facilities, demographics, etc.)
 
 
 @dataclass
@@ -53,11 +52,7 @@ class DatasetDefinition:
         subdirectories_to_scan: Directories to scan for data files
         default_duckdb_filename: Default filename for local DuckDB database
         primary_verification_table: Table to check for dataset verification
-        bigquery_project_id: Google Cloud project ID for BigQuery access
-        bigquery_dataset_ids: BigQuery dataset IDs containing the tables
-        requires_authentication: Whether dataset requires auth (e.g., credentialed access)
-        modalities: Immutable set of data modalities (TABULAR, NOTES, etc.)
-        related_datasets: Cross-references to related datasets with linkage info
+        modalities: Immutable set of data modalities (TABULAR, etc.)
     """
 
     name: str
@@ -68,28 +63,12 @@ class DatasetDefinition:
     default_duckdb_filename: str | None = None
     primary_verification_table: str | None = None
 
-    # BigQuery Configuration
-    bigquery_project_id: str | None = "physionet-data"
-    bigquery_dataset_ids: list[str] = field(default_factory=list)
-
-    # Authentication
-    requires_authentication: bool = False
-
     # Modality declarations (immutable)
     modalities: frozenset[Modality] = field(default_factory=frozenset)
 
-    # Related datasets (for cross-referencing, e.g., notes linked via subject_id)
-    # Format: {"dataset-name": "Description of how to link"}
-    related_datasets: dict[str, str] = field(default_factory=dict)
-
     # Filesystem directory -> canonical schema name
-    # e.g. {"hosp": "mimiciv_hosp", "icu": "mimiciv_icu"}
-    # Root-level files use empty string key: {"": "eicu_crd"}
+    # e.g. {"": "vf"} maps root-level files to the "vf" schema
     schema_mapping: dict[str, str] = field(default_factory=dict)
-
-    # Canonical schema -> BigQuery dataset ID
-    # e.g. {"mimiciv_hosp": "mimiciv_hosp"}
-    bigquery_schema_mapping: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self):
         """Initialize computed fields."""
@@ -211,9 +190,8 @@ class DatasetRegistry:
                     # Default: tabular data
                     data["modalities"] = frozenset({Modality.TABULAR})
 
-                # Default empty dicts for schema mapping fields
+                # Default empty dict for schema mapping
                 data.setdefault("schema_mapping", {})
-                data.setdefault("bigquery_schema_mapping", {})
 
                 ds = DatasetDefinition(**data)
                 cls.register(ds)
@@ -229,88 +207,15 @@ class DatasetRegistry:
     @classmethod
     def _register_builtins(cls):
         """Register built-in datasets."""
-        mimic_iv_demo = DatasetDefinition(
-            name="mimic-iv-demo",
-            description="MIMIC-IV Clinical Database Demo",
-            file_listing_url="https://physionet.org/files/mimic-iv-demo/2.2/",
-            subdirectories_to_scan=["hosp", "icu"],
-            primary_verification_table="mimiciv_hosp.admissions",
-            bigquery_project_id=None,
-            bigquery_dataset_ids=[],
+        vf_ghana = DatasetDefinition(
+            name="vf-ghana",
+            description="Virtue Foundation Ghana Healthcare Facilities",
+            primary_verification_table="vf.facilities",
             modalities=frozenset({Modality.TABULAR}),
-            schema_mapping={"hosp": "mimiciv_hosp", "icu": "mimiciv_icu"},
+            schema_mapping={"": "vf"},
         )
 
-        mimic_iv = DatasetDefinition(
-            name="mimic-iv",
-            description="MIMIC-IV Clinical Database",
-            file_listing_url="https://physionet.org/files/mimiciv/3.1/",
-            subdirectories_to_scan=["hosp", "icu"],
-            primary_verification_table="mimiciv_hosp.admissions",
-            bigquery_project_id="physionet-data",
-            bigquery_dataset_ids=[
-                "mimiciv_3_1_hosp",
-                "mimiciv_3_1_icu",
-                "mimiciv_derived",
-            ],
-            requires_authentication=True,
-            modalities=frozenset({Modality.TABULAR}),
-            related_datasets={
-                "mimic-iv-note": (
-                    "Clinical notes (discharge summaries, radiology reports). "
-                    "Link via subject_id."
-                ),
-            },
-            schema_mapping={
-                "hosp": "mimiciv_hosp",
-                "icu": "mimiciv_icu",
-                "derived": "mimiciv_derived",
-            },
-            bigquery_schema_mapping={
-                "mimiciv_hosp": "mimiciv_3_1_hosp",
-                "mimiciv_icu": "mimiciv_3_1_icu",
-                "mimiciv_derived": "mimiciv_derived",
-            },
-        )
-
-        mimic_iv_note = DatasetDefinition(
-            name="mimic-iv-note",
-            description="MIMIC-IV Clinical Notes (discharge summaries, radiology reports)",
-            file_listing_url="https://physionet.org/files/mimic-iv-note/2.2/",
-            subdirectories_to_scan=["note"],
-            primary_verification_table="mimiciv_note.discharge",
-            bigquery_project_id="physionet-data",
-            bigquery_dataset_ids=["mimiciv_note"],
-            requires_authentication=True,
-            modalities=frozenset({Modality.NOTES}),
-            related_datasets={
-                "mimic-iv": (
-                    "Structured clinical data (labs, vitals, admissions). "
-                    "Link via subject_id."
-                ),
-            },
-            schema_mapping={"note": "mimiciv_note"},
-            bigquery_schema_mapping={"mimiciv_note": "mimiciv_note"},
-        )
-
-        eicu = DatasetDefinition(
-            name="eicu",
-            description="eICU Collaborative Research Database",
-            file_listing_url="https://physionet.org/files/eicu-crd/2.0/",
-            subdirectories_to_scan=[],
-            primary_verification_table="eicu_crd.patient",
-            bigquery_project_id="physionet-data",
-            bigquery_dataset_ids=["eicu_crd"],
-            requires_authentication=True,
-            modalities=frozenset({Modality.TABULAR}),
-            schema_mapping={"": "eicu_crd"},
-            bigquery_schema_mapping={"eicu_crd": "eicu_crd"},
-        )
-
-        cls.register(mimic_iv_demo)
-        cls.register(mimic_iv)
-        cls.register(mimic_iv_note)
-        cls.register(eicu)
+        cls.register(vf_ghana)
 
 
 # Initialize registry

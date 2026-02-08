@@ -144,9 +144,9 @@ class Tool(Protocol):
 
         Example:
             tool = ExecuteQueryTool()
-            mimic = DatasetRegistry.get("mimic-iv")
-            if tool.is_compatible(mimic):
-                output = tool.invoke(mimic, params)
+            vf = DatasetRegistry.get("vf-ghana")
+            if tool.is_compatible(vf):
+                output = tool.invoke(vf, params)
         """
         # Check explicit dataset restrictions
         if self.supported_datasets is not None:

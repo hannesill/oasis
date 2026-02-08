@@ -109,8 +109,8 @@ class ToolSelector:
 
     Example:
         selector = ToolSelector()
-        mimic = DatasetRegistry.get("mimic-iv-full")
-        compatible_tools = selector.tools_for_dataset(mimic)
+        vf = DatasetRegistry.get("vf-ghana")
+        compatible_tools = selector.tools_for_dataset(vf)
     """
 
     def tools_for_dataset(self, dataset: DatasetDefinition | str) -> list[Tool]:
@@ -128,11 +128,11 @@ class ToolSelector:
 
         Example:
             # By name
-            tools = selector.tools_for_dataset("mimic-iv-full")
+            tools = selector.tools_for_dataset("vf-ghana")
 
             # By definition
-            mimic = DatasetRegistry.get("mimic-iv-full")
-            tools = selector.tools_for_dataset(mimic)
+            vf = DatasetRegistry.get("vf-ghana")
+            tools = selector.tools_for_dataset(vf)
         """
         # Resolve dataset if given as string
         if isinstance(dataset, str):
@@ -161,8 +161,8 @@ class ToolSelector:
             True if the tool exists and is compatible with the dataset
 
         Example:
-            if selector.is_tool_available("search_clinical_notes", "eicu"):
-                # eICU doesn't have notes -> False
+            if selector.is_tool_available("execute_query", "vf-ghana"):
+                # vf-ghana has TABULAR -> True
                 ...
         """
         tool = ToolRegistry.get(tool_name)

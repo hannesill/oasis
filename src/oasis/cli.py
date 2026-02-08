@@ -7,14 +7,12 @@ from typing import Annotated
 import typer
 
 from oasis.config import (
-    VALID_BACKENDS,
     detect_available_local_datasets,
     get_active_backend,
     get_active_dataset,
     get_dataset_parquet_root,
     get_default_database_path,
     logger,
-    set_active_backend,
     set_active_dataset,
 )
 from oasis.console import (
@@ -97,18 +95,18 @@ def dataset_init_cmd(
         str,
         typer.Argument(
             help=(
-                "Dataset to initialize (local). Default: 'mimic-iv-demo'. "
+                "Dataset to initialize. Default: 'vf-ghana'. "
                 f"Supported: {', '.join([ds.name for ds in DatasetRegistry.list_all()])}"
             ),
             metavar="DATASET_NAME",
         ),
-    ] = "mimic-iv-demo",
+    ] = "vf-ghana",
     src: Annotated[
         str | None,
         typer.Option(
             "--src",
             help=(
-                "Path to existing raw CSV.gz root (hosp/, icu/). If provided, download is skipped."
+                "Path to existing raw CSV files. If omitted, auto-detects vf-ghana.csv in project root."
             ),
         ),
     ] = None,
@@ -187,11 +185,24 @@ def dataset_init_cmd(
         raise typer.Exit(code=1)
 
     csv_root_default = pq_root.parent.parent / "raw_files" / dataset_key
-    csv_root = Path(src).resolve() if src else csv_root_default
+
+    # Auto-detect vf-ghana.csv in project root when no --src given
+    if src:
+        csv_root = Path(src).resolve()
+    elif dataset_key == "vf-ghana":
+        from oasis.config import _PROJECT_ROOT
+
+        vf_csv = _PROJECT_ROOT / "vf-ghana.csv"
+        if vf_csv.exists():
+            csv_root = vf_csv.parent
+        else:
+            csv_root = csv_root_default
+    else:
+        csv_root = csv_root_default
 
     # Presence detection
     parquet_present = any(pq_root.rglob("*.parquet"))
-    raw_present = any(csv_root.rglob("*.csv.gz"))
+    raw_present = any(csv_root.rglob("*.csv.gz")) or any(csv_root.rglob("*.csv"))
 
     console.print()
     print_banner(f"Initializing {dataset_key}", "Checking existing files...")
@@ -206,31 +217,6 @@ def dataset_init_cmd(
 
     # Step 1: Ensure raw dataset exists
     if not raw_present and not parquet_present:
-        requires_auth = ds.requires_authentication
-
-        if requires_auth:
-            base_url = ds.file_listing_url
-
-            console.print()
-            error(f"Files not found for credentialed dataset '{dataset_key}'")
-            console.print()
-            console.print("[bold]To download this credentialed dataset:[/bold]")
-            console.print(
-                f"  [bold]1.[/bold] Sign the DUA at: [link]{base_url or 'https://physionet.org'}[/link]"
-            )
-            console.print(
-                "  [bold]2.[/bold] Run this command (you'll be prompted for your PhysioNet password):"
-            )
-            console.print()
-
-            wget_cmd = f"wget -r -N -c -np --user YOUR_USERNAME --ask-password {base_url} -P {csv_root}"
-            print_command(wget_cmd)
-            console.print()
-            console.print(
-                f"  [bold]3.[/bold] Re-run: [command]oasis init {dataset_key}[/command]"
-            )
-            return
-
         listing_url = ds.file_listing_url
         if listing_url:
             out_dir = csv_root_default
@@ -343,7 +329,7 @@ def use_cmd(
     target: Annotated[
         str,
         typer.Argument(
-            help="Select active dataset: name (e.g., mimic-iv-full)", metavar="TARGET"
+            help="Select active dataset: name (e.g., vf-ghana)", metavar="TARGET"
         ),
     ],
 ):
@@ -411,10 +397,7 @@ def status_cmd(
                     "name": label,
                     "parquet_present": ds_info["parquet_present"],
                     "db_present": ds_info["db_present"],
-                    "bigquery_available": False,
                     "parquet_size_gb": parquet_size_gb,
-                    "derived_materialized": None,
-                    "derived_total": None,
                 }
             )
 
@@ -477,7 +460,6 @@ def status_cmd(
         parquet_root=str(ds_info["parquet_root"]),
         db_path=str(ds_info["db_path"]),
         parquet_size_gb=parquet_size_gb,
-        bigquery_available=False,
         row_count=row_count,
         is_active=True,
     )

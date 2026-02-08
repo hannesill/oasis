@@ -224,20 +224,11 @@ def _download_dataset_files(
 def download_dataset(dataset_name: str, output_root: Path) -> bool:
     """
     Public wrapper to download a supported dataset's CSV files.
-    - Currently intended for 'mimic-iv-demo' (public demo); extendable for others.
-    - Downloads into output_root preserving subdirectory structure (e.g., hosp/, icu/).
+    Downloads into output_root preserving subdirectory structure.
     """
     ds = DatasetRegistry.get(dataset_name.lower())
     if not ds:
         logger.error(f"Unsupported dataset: {dataset_name}")
-        return False
-
-    # Prevent accidental scraping of credentialed datasets
-    if ds.requires_authentication:
-        logger.error(
-            f"Dataset '{dataset_name}' requires authentication and cannot be auto-downloaded. "
-            "Please download files manually."
-        )
         return False
 
     if not ds.file_listing_url:
@@ -273,7 +264,7 @@ def _csv_to_parquet_all(src_root: Path, parquet_root: Path) -> bool:
         OASIS_DUCKDB_THREADS     (default: 2)
     """
     parquet_paths: list[Path] = []
-    csv_files = list(src_root.rglob("*.csv.gz"))
+    csv_files = list(src_root.rglob("*.csv.gz")) + list(src_root.rglob("*.csv"))
     if not csv_files:
         logger.error(f"No CSV files found in {src_root}")
         return False
@@ -284,11 +275,15 @@ def _csv_to_parquet_all(src_root: Path, parquet_root: Path) -> bool:
     except Exception:
         pass
 
-    def _convert_one(csv_gz: Path) -> tuple[Path | None, float, str]:
+    def _convert_one(csv_file: Path) -> tuple[Path | None, float, str]:
         """Convert one CSV file and return the output path, time taken, and filename."""
         start = time.time()
-        rel = csv_gz.relative_to(src_root)
-        out = parquet_root / rel.with_suffix("").with_suffix(".parquet")
+        rel = csv_file.relative_to(src_root)
+        # Handle both .csv.gz (strip two suffixes) and .csv (strip one suffix)
+        if rel.suffixes == [".csv", ".gz"]:
+            out = parquet_root / rel.with_suffix("").with_suffix(".parquet")
+        else:
+            out = parquet_root / rel.with_suffix(".parquet")
         out.parent.mkdir(parents=True, exist_ok=True)
 
         con = duckdb.connect()
@@ -302,7 +297,7 @@ def _csv_to_parquet_all(src_root: Path, parquet_root: Path) -> bool:
             sql = f"""
                 COPY (
                   SELECT * FROM read_csv_auto(
-                    '{csv_gz.as_posix()}',
+                    '{csv_file.as_posix()}',
                     sample_size=-1,
                     auto_detect=true,
                     nullstr=['', 'NULL', 'NA', 'N/A', '___'],
@@ -313,7 +308,7 @@ def _csv_to_parquet_all(src_root: Path, parquet_root: Path) -> bool:
             """
             con.execute(sql)
             elapsed = time.time() - start
-            return out, elapsed, csv_gz.name
+            return out, elapsed, csv_file.name
         finally:
             con.close()
 
@@ -363,8 +358,8 @@ def convert_csv_to_parquet(
     dataset_name: str, csv_root: Path, parquet_root: Path
 ) -> bool:
     """
-    Public wrapper to convert CSV.gz files to Parquet for a dataset.
-    - csv_root: root folder containing hosp/ and icu/ CSV.gz files
+    Public wrapper to convert CSV files to Parquet for a dataset.
+    - csv_root: root folder containing CSV or CSV.gz files
     - parquet_root: destination root for Parquet files mirroring structure
     """
     if not csv_root.exists():
@@ -416,13 +411,11 @@ def _create_duckdb_with_views(
 
     If schema_mapping is provided, creates real DuckDB schemas and
     schema-qualified views:
-    - hosp/admissions.parquet with {"hosp": "mimiciv_hosp"}
-      -> CREATE SCHEMA mimiciv_hosp; CREATE VIEW mimiciv_hosp.admissions AS ...
-    - patient.parquet with {"": "eicu_crd"}
-      -> CREATE SCHEMA eicu_crd; CREATE VIEW eicu_crd.patient AS ...
+    - facilities.parquet with {"": "vf"}
+      -> CREATE SCHEMA vf; CREATE VIEW vf.facilities AS ...
 
     If schema_mapping is None (backward compat for custom datasets),
-    uses flat naming: hosp/admissions.parquet -> hosp_admissions
+    uses flat naming: subdir/table.parquet -> subdir_table
     """
     try:
         con = duckdb.connect(str(db_path))
@@ -451,8 +444,6 @@ def _create_duckdb_with_views(
         # Create schemas upfront if schema_mapping provided
         if schema_mapping:
             for schema_name in set(schema_mapping.values()):
-                if schema_name == "mimiciv_derived":
-                    continue  # Created by oasis init-derived
                 con.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema_name}"')
 
         logger.info(f"Creating {len(parquet_files)} views in DuckDB...")
@@ -477,7 +468,7 @@ def _create_duckdb_with_views(
                     schema_name = schema_mapping.get(dir_key)
                     if schema_name is None:
                         # Fallback: flat files with a single-schema mapping
-                        # (e.g. mimic-iv-note parquets at root instead of note/)
+                        # (e.g. flat parquets at root instead of subdirectory)
                         unique_schemas = set(schema_mapping.values())
                         if dir_key == "" and len(unique_schemas) == 1:
                             schema_name = next(iter(unique_schemas))

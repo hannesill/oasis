@@ -10,13 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from oasis.config import get_active_backend, get_default_database_path
-
-# Error messages
-_DATABASE_PATH_ERROR_MSG = (
-    "Could not determine default database path for mimic-iv-demo.\n"
-    "Please run 'oasis init mimic-iv-demo' first."
-)
+from oasis.config import get_default_database_path
 
 
 class MCPConfigGenerator:
@@ -87,13 +81,9 @@ class MCPConfigGenerator:
         server_name: str = "oasis",
         python_path: str | None = None,
         working_directory: str | None = None,
-        backend: str = "duckdb",
         db_path: str | None = None,
-        project_id: str | None = None,
         additional_env: dict[str, str] | None = None,
         module_name: str = "oasis.mcp_server",
-        oauth2_enabled: bool = False,
-        oauth2_config: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Generate MCP server configuration."""
 
@@ -113,9 +103,7 @@ class MCPConfigGenerator:
         oasis_data_dir = self._find_oasis_data_dir(working_directory)
 
         # Build environment variables
-        # Backend is read from oasis_data/config.json (set via `oasis backend`)
         env = {
-            # Set OASIS_DATA_DIR to ensure server finds data in the correct location
             "OASIS_DATA_DIR": str(oasis_data_dir),
         }
 
@@ -125,37 +113,9 @@ class MCPConfigGenerator:
         ).exists():
             env["PYTHONPATH"] = str(Path(working_directory) / "src")
 
-        # Add backend-specific environment variables
-        if backend == "duckdb":
-            if db_path:
-                env["OASIS_DB_PATH"] = db_path
-            # If no db_path, we rely on dynamic resolution in the server
-
-        elif backend == "bigquery" and project_id:
-            env["OASIS_PROJECT_ID"] = project_id
-            env["GOOGLE_CLOUD_PROJECT"] = project_id
-
-        # Add OAuth2 configuration if enabled
-        if oauth2_enabled and oauth2_config:
-            env.update(
-                {
-                    "OASIS_OAUTH2_ENABLED": "true",
-                    "OASIS_OAUTH2_ISSUER_URL": oauth2_config.get("issuer_url", ""),
-                    "OASIS_OAUTH2_AUDIENCE": oauth2_config.get("audience", ""),
-                    "OASIS_OAUTH2_REQUIRED_SCOPES": oauth2_config.get(
-                        "required_scopes", "read:mimic-data"
-                    ),
-                    "OASIS_OAUTH2_JWKS_URL": oauth2_config.get("jwks_url", ""),
-                }
-            )
-
-            # Optional OAuth2 settings
-            if oauth2_config.get("client_id"):
-                env["OASIS_OAUTH2_CLIENT_ID"] = oauth2_config["client_id"]
-            if oauth2_config.get("rate_limit_requests"):
-                env["OASIS_OAUTH2_RATE_LIMIT_REQUESTS"] = str(
-                    oauth2_config["rate_limit_requests"]
-                )
+        # Add custom DuckDB path if provided
+        if db_path:
+            env["OASIS_DB_PATH"] = db_path
 
         # Add any additional environment variables
         if additional_env:
@@ -203,86 +163,21 @@ class MCPConfigGenerator:
         if not working_directory:
             working_directory = str(self.current_dir)
 
-        # Backend selection - simplified
-        print("\nChoose backend:")
-        print("1. DuckDB (local database)")
-        print("2. BigQuery (Google Cloud)")
-
-        while True:
-            backend_choice = input("Choose backend [1]: ").strip() or "1"
-            if backend_choice in ["1", "2"]:
-                break
-            print("Please enter 1 or 2")
-
-        backend = "duckdb" if backend_choice == "1" else "bigquery"
-
-        # Backend-specific configuration
-        db_path = None
-        project_id = None
-
-        if backend == "duckdb":
-            print("\nDuckDB Configuration:")
-            default_db_path = get_default_database_path("mimic-iv-demo")
-            if default_db_path is None:
-                raise ValueError(_DATABASE_PATH_ERROR_MSG)
+        # DuckDB Configuration
+        print("\nDuckDB Configuration:")
+        default_db_path = get_default_database_path("vf-ghana")
+        if default_db_path:
             print(f"Default database path: {default_db_path}")
 
-            print(
-                "\nLeaving database path empty allows switching datasets dynamically via 'oasis use'."
-            )
-            db_path = (
-                input(
-                    "DuckDB database path (optional, press Enter for dynamic): "
-                ).strip()
-                or None
-            )
-
-        elif backend == "bigquery":
-            print("\nBigQuery Configuration:")
-            project_id = None
-            while not project_id:
-                project_id = input(
-                    "Google Cloud project ID (required for BigQuery): "
-                ).strip()
-                if not project_id:
-                    print(
-                        "Error: Project ID is required when using BigQuery backend. Please enter your GCP project ID."
-                    )
-            print(f"Will use project: {project_id}")
-
-        # OAuth2 Configuration
-        oauth2_enabled = False
-        oauth2_config = None
-
-        print("\nOAuth2 Authentication (optional):")
-        enable_oauth2 = input("Enable OAuth2 authentication? [y/N]: ").strip().lower()
-
-        if enable_oauth2 in ["y", "yes"]:
-            oauth2_enabled = True
-            oauth2_config = {}
-
-            print("\nOAuth2 Configuration:")
-            oauth2_config["issuer_url"] = input(
-                "OAuth2 Issuer URL (e.g., https://auth.example.com): "
+        print(
+            "\nLeaving database path empty allows switching datasets dynamically via 'oasis use'."
+        )
+        db_path = (
+            input(
+                "DuckDB database path (optional, press Enter for dynamic): "
             ).strip()
-            oauth2_config["audience"] = input(
-                "OAuth2 Audience (e.g., oasis-api): "
-            ).strip()
-            oauth2_config["required_scopes"] = (
-                input("Required Scopes [read:mimic-data]: ").strip()
-                or "read:mimic-data"
-            )
-
-            # Optional settings
-            jwks_url = input("JWKS URL (optional, auto-discovered if empty): ").strip()
-            if jwks_url:
-                oauth2_config["jwks_url"] = jwks_url
-
-            rate_limit = input("Rate limit (requests per hour) [100]: ").strip()
-            if rate_limit and rate_limit.isdigit():
-                oauth2_config["rate_limit_requests"] = rate_limit
-
-            print("OAuth2 configuration added")
+            or None
+        )
 
         # Additional environment variables
         additional_env = {}
@@ -305,13 +200,9 @@ class MCPConfigGenerator:
             server_name=server_name,
             python_path=python_path,
             working_directory=working_directory,
-            backend=backend,
             db_path=db_path,
-            project_id=project_id,
             additional_env=additional_env if additional_env else None,
             module_name="oasis.mcp_server",
-            oauth2_enabled=oauth2_enabled,
-            oauth2_config=oauth2_config,
         )
 
 
@@ -326,34 +217,20 @@ def print_config_info(config: dict[str, Any]):
     print(f"Server name: {server_name}")
     print(f"Python path: {server_config['command']}")
     print(f"Working directory: {server_config['cwd']}")
-
-    # Backend is read from config file, not from MCP env
-    backend = get_active_backend()
-    print(f"Backend: {backend} (from oasis_data/config.json)")
+    print("Backend: duckdb")
 
     if "OASIS_DB_PATH" in server_config["env"]:
         print(f"Database path: {server_config['env']['OASIS_DB_PATH']}")
-    elif backend == "duckdb":
-        # Show the default path when using DuckDB backend
-        default_path = get_default_database_path("mimic-iv-demo")
-        if default_path is None:
-            raise ValueError(_DATABASE_PATH_ERROR_MSG)
-        print(f"Database path: {default_path}")
-
-    if "OASIS_PROJECT_ID" in server_config["env"]:
-        print(f"Project ID: {server_config['env']['OASIS_PROJECT_ID']}")
+    else:
+        default_path = get_default_database_path("vf-ghana")
+        if default_path:
+            print(f"Database path: {default_path}")
 
     # Show additional env vars (excluding ones we've already displayed)
     additional_env = {
         k: v
         for k, v in server_config["env"].items()
-        if k
-        not in [
-            "PYTHONPATH",
-            "OASIS_DB_PATH",
-            "OASIS_PROJECT_ID",
-            "GOOGLE_CLOUD_PROJECT",
-        ]
+        if k not in ["PYTHONPATH", "OASIS_DB_PATH"]
     }
     if additional_env:
         print("Additional environment variables:")
@@ -376,9 +253,6 @@ Examples:
   # Quick generation with defaults
   python dynamic_mcp_config.py --quick
 
-  # Custom configuration
-  python dynamic_mcp_config.py --python-path /usr/bin/python3 --backend bigquery --project-id my-project
-
   # Save to file
   python dynamic_mcp_config.py --output config.json
         """,
@@ -395,16 +269,7 @@ Examples:
     parser.add_argument("--python-path", help="Path to Python executable")
     parser.add_argument("--working-directory", help="Working directory for the server")
     parser.add_argument(
-        "--backend",
-        choices=["duckdb", "bigquery"],
-        default="duckdb",
-        help="Backend to use (default: duckdb)",
-    )
-    parser.add_argument(
-        "--db-path", help="Path to DuckDB database (for duckdb backend)"
-    )
-    parser.add_argument(
-        "--project-id", help="Google Cloud project ID (for bigquery backend)"
+        "--db-path", help="Path to DuckDB database"
     )
     parser.add_argument(
         "--env",
@@ -423,29 +288,6 @@ Examples:
 
     args = parser.parse_args()
 
-    # Validate backend-specific arguments
-    if args.backend in ("duckdb",) and args.project_id:
-        print(
-            "Error: --project-id can only be used with --backend bigquery",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
-    if args.backend == "bigquery" and args.db_path:
-        print(
-            "Error: --db-path can only be used with --backend duckdb",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
-    # Require project_id for BigQuery backend
-    if args.backend == "bigquery" and not args.project_id:
-        print(
-            "Error: --project-id is required when using --backend bigquery",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
     generator = MCPConfigGenerator()
 
     try:
@@ -462,9 +304,7 @@ Examples:
                 server_name=args.server_name,
                 python_path=args.python_path,
                 working_directory=args.working_directory,
-                backend=args.backend,
                 db_path=args.db_path,
-                project_id=args.project_id,
                 additional_env=additional_env if additional_env else None,
                 module_name="oasis.mcp_server",
             )

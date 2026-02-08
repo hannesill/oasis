@@ -4,7 +4,7 @@ This document defines how OASIS skills should be structured, including metadata,
 
 ## Design Principles
 
-**Dataset-agnostic by default.** Skills should document concepts, not dataset-specific implementations. A SOFA score is a SOFA score regardless of whether it's computed from MIMIC-IV or eICU. The SKILL.md body describes the clinical logic (thresholds, components, edge cases) in a dataset-agnostic way. Dataset-specific SQL goes in separate script files.
+**Dataset-agnostic by default.** Skills should document concepts, not dataset-specific implementations. The SKILL.md body describes the domain logic in a dataset-agnostic way. Dataset-specific SQL goes in separate script files.
 
 **Context-efficient.** SKILL.md is loaded into AI context. Every line should earn its place. Provenance, licensing, and authorship belong in PROVENANCE.yaml, not in the frontmatter. The body should only include information the AI can't already infer.
 
@@ -21,7 +21,7 @@ src/oasis/skills/
 │   │   ├── SKILL.md
 │   │   ├── PROVENANCE.yaml
 │   │   └── scripts/
-│   │       └── mimic-iv.sql
+│   │       └── vf-ghana.sql
 │   ├── sepsis-3-cohort/
 │   │   └── ...
 │   └── ...
@@ -41,8 +41,7 @@ skill-name/
 ├── SKILL.md            # Metadata + content (loaded into AI context)
 ├── PROVENANCE.yaml     # Provenance and audit trail (not loaded into AI context)
 └── scripts/            # SQL implementations (optional)
-    ├── mimic-iv.sql    # Dataset-specific scripts in separate files
-    └── eicu.sql
+    └── vf-ghana.sql    # Dataset-specific scripts in separate files
 ```
 
 When installed to agent tool directories (e.g., `.claude/skills/`), skills are flattened — the category subdirectories are not preserved. This ensures compatibility with all agent tools regardless of their skill discovery mechanism.
@@ -56,7 +55,7 @@ The skill file has two parts: a YAML frontmatter header and a markdown body.
 ```yaml
 ---
 name: sofa-score
-description: Calculate SOFA (Sequential Organ Failure Assessment) score for ICU patients. Use for sepsis severity assessment, organ dysfunction quantification, mortality prediction, or Sepsis-3 criteria evaluation.
+description: Analyze healthcare facility capabilities and coverage gaps. Use for medical desert identification, resource gap analysis, or facility comparison.
 tier: validated
 category: clinical
 ---
@@ -111,7 +110,7 @@ SQL or code examples with comments explaining the logic.
 - Be aware of context constraints. Only include information that is not trivial to the model and keep the skill focused in scope.
 - Include working examples — these are the most valuable part for the AI.
 - Keep "Critical Implementation Notes" sections for gotchas that would otherwise lead to wrong results (e.g., "FiO2 can come from blood gas OR charted values", "ICD codes are assigned at discharge, not admission").
-- **Keep SQL examples dataset-agnostic where possible.** If dataset-specific SQL is needed, put it in the `scripts/` directory with one file per dataset (e.g., `scripts/mimic-iv.sql`, `scripts/eicu.sql`) rather than embedding multiple versions in the body.
+- **Keep SQL examples dataset-agnostic where possible.** If dataset-specific SQL is needed, put it in the `scripts/` directory with one file per dataset (e.g., `scripts/vf-ghana.sql`) rather than embedding multiple versions in the body.
 - End with a brief references section citing key publications or documentation. 2-3 citations is typical.
 
 ## PROVENANCE.yaml
@@ -120,8 +119,8 @@ This file tracks who created the skill, who reviewed it, and where the content c
 
 ```yaml
 sources:
-  - url: https://github.com/MIT-LCP/mimic-code/tree/main/mimic-iv/concepts/score
-    description: MIT-LCP mimic-code SOFA implementation
+  - url: https://example.org/clinical-scoring-reference
+    description: Clinical scoring reference implementation
     license: Apache-2.0
 
 created:
@@ -142,7 +141,7 @@ references:
 changelog:
   - version: "1.0"
     date: 2025-01-15
-    summary: Initial extraction from mimic-code
+    summary: Initial skill creation
 ```
 
 ### Field Reference
@@ -172,13 +171,13 @@ Skills fall into one of two categories based on what they encode:
 
 The skill encodes clinical domain knowledge — scoring systems, cohort definitions, lab interpretation, organ failure criteria, medication calculations, or research methodology with clinical content.
 
-**Examples:** sofa-score, sepsis-3-cohort, kdigo-aki-staging, clinical-research-pitfalls
+**Examples:** vf-schema, idp-extraction, medical-desert-analysis
 
 ### `system`
 
 The skill encodes OASIS framework knowledge, data structure guidance, workflow patterns, or meta-skills for contributing to OASIS.
 
-**Examples:** oasis-api, oasis-research, mimic-table-relationships, create-oasis-skill
+**Examples:** oasis-api, create-oasis-skill
 
 Category is orthogonal to tier — a system skill can be `validated` (well-reviewed) just as a clinical skill can be `community` (contributed without clinical review).
 
@@ -201,7 +200,7 @@ The skill derives from a published, externally validated source and has been rev
 - Based on documented, stable APIs or established patterns
 - At least one technical review on record with `scope: technical-accuracy`
 
-**Example:** SOFA score skill extracted from mimic-code, reviewed by an intensivist who verified the scoring thresholds match Vincent 1996.
+**Example:** VF Ghana schema skill created from the Virtue Foundation dataset documentation, reviewed by a team member who verified column semantics against the source CSV.
 
 ### `expert`
 
@@ -274,7 +273,7 @@ The Example Score estimates severity using 3 components, each scored 0-4.
 SELECT
     stay_id,
     hr_score + sbp_score + temp_score AS example_score
-FROM mimiciv_derived.example_score
+FROM vf.facilities
 WHERE hr = 24;
 ​```
 

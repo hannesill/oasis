@@ -2,7 +2,7 @@
 
 This module defines the abstract Backend protocol that all database backends
 must implement. This enables clean separation between the tool layer and
-the actual database implementations (DuckDB, BigQuery, etc.).
+the actual database implementations (DuckDB, etc.).
 """
 
 from dataclasses import dataclass
@@ -67,20 +67,12 @@ def sanitize_error_message(error: Exception, backend_name: str = "unknown") -> s
     if "syntax error" in error_str or "parse error" in error_str:
         return "SQL syntax error. Please check your query syntax."
 
-    # BigQuery 404: dataset or project not found
     if "not found" in error_str and (
-        "dataset" in error_str or "project" in error_str or "404" in error_str
+        "dataset" in error_str or "404" in error_str
     ):
         return (
-            "Resource not found. Check that the dataset and project ID are correct. "
+            "Resource not found. Check that the dataset is correctly configured. "
             "Use get_backend_info() to verify your configuration."
-        )
-
-    # Billing errors (check before permission -- billing errors often contain "access denied")
-    if "billing" in error_str:
-        return (
-            "Billing error. Ensure your Google Cloud project has billing enabled "
-            "and the project ID is correct."
         )
 
     if (
@@ -97,10 +89,6 @@ def sanitize_error_message(error: Exception, backend_name: str = "unknown") -> s
 
     if "connection" in error_str or "network" in error_str:
         return "Connection error. Please check your network and try again."
-
-    # Quota / rate limit
-    if "quota" in error_str or "rate limit" in error_str:
-        return "Quota exceeded or rate limited. Wait and retry, or request a quota increase."
 
     # Generic fallback -- include error type AND message for diagnostics
     error_type = type(error).__name__
@@ -142,18 +130,8 @@ class Backend(Protocol):
     need to explicitly inherit from a base class.
 
     Example:
-        class DuckDBBackend:
-            def execute_query(self, sql, dataset):
-                # DuckDB-specific implementation
-                ...
-
-            def get_table_list(self, dataset):
-                # Return list of tables
-                ...
-
-        # Usage
         backend = DuckDBBackend()
-        result = backend.execute_query("SELECT * FROM patients LIMIT 5", mimic_demo)
+        result = backend.execute_query("SELECT * FROM vf.facilities LIMIT 5", vf_ghana)
     """
 
     def execute_query(self, sql: str, dataset: DatasetDefinition) -> QueryResult:
@@ -225,5 +203,5 @@ class Backend(Protocol):
 
     @property
     def name(self) -> str:
-        """Get the backend name (e.g., 'duckdb', 'bigquery')."""
+        """Get the backend name (e.g., 'duckdb')."""
         ...

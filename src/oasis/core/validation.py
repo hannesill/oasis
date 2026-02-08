@@ -135,9 +135,8 @@ def is_safe_query(sql_query: str) -> tuple[bool, str]:
 def validate_table_name(table_name: str) -> bool:
     """Validate a table name to prevent SQL injection.
 
-    Accepts plain table names (``patients``), qualified names
-    (``mimiciv_hosp.patients``), and backtick-wrapped BigQuery names
-    (``\\`project.dataset.table\\```).
+    Accepts plain table names (``facilities``), and qualified names
+    (``vf.facilities``).
 
     Args:
         table_name: The table name to validate
@@ -147,10 +146,6 @@ def validate_table_name(table_name: str) -> bool:
     """
     if not table_name or not isinstance(table_name, str):
         return False
-
-    # Backtick-wrapped BigQuery names pass through without further checks
-    if table_name.startswith("`") and table_name.endswith("`"):
-        return True
 
     # Split on dot — allow 1 part (table) or 2 parts (schema.table)
     parts = table_name.split(".")

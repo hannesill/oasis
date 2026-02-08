@@ -32,10 +32,6 @@ class OASISError(Exception):
     pass
 
 
-# Keep M4Error as an alias for backwards compatibility
-M4Error = OASISError
-
-
 class QueryError(OASISError):
     """Raised when a SQL query fails.
 

@@ -38,7 +38,7 @@ def generate_test_token(
     Example:
         token = generate_test_token(
             subject="test-user-123",
-            scopes=["read:mimic-data", "write:mimic-data"],
+            scopes=["read:oasis-data", "write:oasis-data"],
         )
 
     Warning:
@@ -46,7 +46,7 @@ def generate_test_token(
         in production environments.
     """
     if scopes is None:
-        scopes = ["read:mimic-data"]
+        scopes = ["read:oasis-data"]
 
     now = datetime.now(timezone.utc)
     claims = {
