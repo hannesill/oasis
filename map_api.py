@@ -22,6 +22,13 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 os.environ.setdefault("OASIS_DATA_DIR", str(Path(__file__).parent / "oasis_data"))
 os.environ.setdefault("OASIS_DATASET", "vf-ghana")
 
+# Load .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv not installed, skip
+
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -68,6 +75,15 @@ app.add_middleware(
 @app.get("/")
 async def index():
     return FileResponse("map_local_test.html")
+
+
+@app.get("/api/config")
+async def get_config():
+    """Return API keys for frontend (from .env)."""
+    return JSONResponse({
+        "mapbox_token": os.getenv("MAPBOX_TOKEN", ""),
+        "elevenlabs_api_key": os.getenv("ELEVENLABS_API_KEY", ""),
+    })
 
 
 @app.get("/facilities.geojson")

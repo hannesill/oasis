@@ -22,8 +22,9 @@ import * as THREE from 'three';
 // ═══════════════════════════════════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════════════════════════════════
-const MAPBOX_TOKEN = 'pk.eyJ1IjoicmFqbmFmIiwiYSI6ImNtbGN3cm1uMzExd3czZnI0OGVleW9iNnYifQ.xbDfYFsP0nLZtcltzMzVTw';
-const ELEVENLABS_API_KEY = 'sk_8edfc5ce468756b30944fd0074da83ba789b86cdae1d8d65';
+// CONFIG (read from .env via Vite - must be prefixed with VITE_)
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
+const ELEVENLABS_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY || '';
 
 // ═══════════════════════════════════════════════════════════════
 // MCP APP INIT

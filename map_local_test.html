@@ -9,6 +9,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/three@0.126.0/build/three.min.js"></script>
     <script src="https://unpkg.com/three@0.126.0/examples/js/loaders/GLTFLoader.js"></script>
+    <!-- ElevenLabs Conversational AI Widget -->
+    <script src="https://elevenlabs.io/convai-widget/index.js" async type="text/javascript"></script>
     <style>
         :root {
             --accent: #FF6B35;
@@ -292,6 +294,25 @@
         .api-status.show { display:flex; align-items:center; gap:8px; }
         .api-status.ok { color:var(--green); }
         .api-status.err { color:var(--red); }
+
+        /* ── ElevenLabs Avatar Widget ── */
+        elevenlabs-convai {
+            position:fixed; bottom:24px; right:24px; z-index:10000;
+        }
+
+        /* ── 3D Hospital Spotlight Pulse ── */
+        @keyframes spotlight-pulse {
+            0%,100% { box-shadow:0 0 40px 20px rgba(255,107,53,0.3); }
+            50% { box-shadow:0 0 80px 40px rgba(255,107,53,0.6); }
+        }
+        .hospital-spotlight {
+            position:absolute; width:60px; height:60px; border-radius:50%;
+            background:radial-gradient(circle,rgba(255,107,53,0.4) 0%,transparent 70%);
+            animation:spotlight-pulse 2s ease-in-out infinite;
+            pointer-events:none; transform:translate(-50%,-50%);
+            z-index:1;
+        }
+
     </style>
 </head>
 <body>
@@ -418,20 +439,34 @@
     <div class="s"><span>🔬</span><span class="n" id="st-specs">0</span> Specialties</div>
 </div>
 
+
 <!-- ElevenLabs Conversational AI Avatar Widget -->
-<script src="https://elevenlabs.io/convai-widget/index.js" async type="text/javascript"></script>
 <elevenlabs-convai agent-id="5fb47760b0b22b63d689754639894c80b823ed971ff73ced808b98563e1447ce"></elevenlabs-convai>
 
 <script>
 // ═══════════════════════════════════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════════════════════════════════
-const MAPBOX_TOKEN = 'pk.eyJ1IjoicmFqbmFmIiwiYSI6ImNtbGN3cm1uMzExd3czZnI0OGVleW9iNnYifQ.xbDfYFsP0nLZtcltzMzVTw';
-const API_BASE = '';  // same origin when served by map_api.py
-const ELEVENLABS_API_KEY = 'sk_8edfc5ce468756b30944fd0074da83ba789b86cdae1d8d65';
+// API keys loaded from .env via /api/config endpoint
+let MAPBOX_TOKEN = '';
+let ELEVENLABS_API_KEY = '';
 const ELEVENLABS_AGENT_ID = '5fb47760b0b22b63d689754639894c80b823ed971ff73ced808b98563e1447ce';
+const API_BASE = '';  // same origin when served by map_api.py
 
-mapboxgl.accessToken = MAPBOX_TOKEN;
+// Load API keys from server
+(async () => {
+    try {
+        const res = await fetch('/api/config');
+        const config = await res.json();
+        MAPBOX_TOKEN = config.mapbox_token || '';
+        ELEVENLABS_API_KEY = config.elevenlabs_api_key || '';
+        mapboxgl.accessToken = MAPBOX_TOKEN;
+        initMap(); // Initialize map after keys are loaded
+    } catch (e) {
+        console.error('Failed to load API keys:', e);
+        alert('⚠️ Failed to load API keys. Check .env file and server.');
+    }
+})();
 
 // ═══════════════════════════════════════════════════════════════
 // STATE
@@ -446,7 +481,10 @@ let audioElement = null;
 // ═══════════════════════════════════════════════════════════════
 // MAP INIT
 // ═══════════════════════════════════════════════════════════════
-const map = new mapboxgl.Map({
+let map = null;
+
+function initMap() {
+    map = new mapboxgl.Map({
     container: 'map',
     style: 'mapbox://styles/mapbox/dark-v11',
     projection: 'globe',
@@ -487,6 +525,7 @@ map.on('load', async () => {
         map.flyTo({ center: [-1.0232, 7.9465], zoom: 6.5, pitch: 50, bearing: -15, duration: 4000, essential: true });
     }, 2200);
 });
+}
 
 // ═══════════════════════════════════════════════════════════════
 // DATA LOADING
@@ -532,12 +571,53 @@ function populateConditionDropdown() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// HELPER: Convert Point to Polygon for 3D extrusion
+// ═══════════════════════════════════════════════════════════════
+function pointToPolygon(lng, lat, radius = 0.0008) {
+    // Creates a circular polygon ~90m in radius
+    const points = 32;
+    const coords = [];
+    for (let i = 0; i <= points; i++) {
+        const angle = (i / points) * 2 * Math.PI;
+        coords.push([
+            lng + radius * Math.cos(angle),
+            lat + radius * Math.sin(angle)
+        ]);
+    }
+    return coords;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // MAP LAYERS
 // ═══════════════════════════════════════════════════════════════
 function addMapLayers() {
     if (!facilitiesGeoJSON) return;
 
+    // Convert Point geometries to circular Polygons for 3D extrusion
+    // fill-extrusion requires Polygon geometry, not Points!
+    const facilitiesPolygons = {
+        type: 'FeatureCollection',
+        features: facilitiesGeoJSON.features.map(f => {
+            if (f.geometry.type === 'Point') {
+                const [lng, lat] = f.geometry.coordinates;
+                return {
+                    ...f,
+                    geometry: {
+                        type: 'Polygon',
+                        coordinates: [pointToPolygon(lng, lat)]
+                    }
+                };
+            }
+            return f;
+        })
+    };
+
+    console.log('🗺️ Adding map sources:', facilitiesGeoJSON.features.length, 'facilities');
+    console.log('🏗️ Creating 3D polygon source for', facilitiesPolygons.features.length, '3D buildings');
+
+    // Use original Points for markers, Polygons for 3D buildings
     map.addSource('facilities', { type: 'geojson', data: facilitiesGeoJSON });
+    map.addSource('facilities-3d', { type: 'geojson', data: facilitiesPolygons });
 
     // Heatmap — weighted by specialty count (more specialties = hotter)
     map.addLayer({
@@ -564,39 +644,55 @@ function addMapLayers() {
         }
     });
 
-    // 3D Hospital Models (extruded cylinders)
+    // 3D Hospital Models (extruded buildings) - ALWAYS VISIBLE
+    // Uses 'facilities-3d' source which has Polygon geometry (required for extrusion)
     map.addLayer({
         id: 'layer-3d-hospitals',
         type: 'fill-extrusion',
-        source: 'facilities',
-        minzoom: 10,
+        source: 'facilities-3d', // Use polygon source for 3D extrusion
+        minzoom: 6, // Start showing 3D buildings earlier
         paint: {
             'fill-extrusion-color': [
                 'interpolate', ['linear'], ['zoom'],
-                10, '#FF6B35',
+                6, '#FF6B35',
+                10, '#FF7B45',
                 15, '#FF8F6B'
             ],
             'fill-extrusion-height': [
                 'interpolate', ['exponential', 1.5], ['zoom'],
-                10, 20,
-                14, 80,
-                18, 200
+                6, 10,    // Small buildings when zoomed out
+                10, 40,   // Medium buildings at mid zoom
+                14, 100,  // Larger buildings when closer
+                18, 250   // Very tall when zoomed in
             ],
             'fill-extrusion-base': 0,
-            'fill-extrusion-opacity': 0.9,
+            'fill-extrusion-opacity': [
+                'interpolate', ['linear'], ['zoom'],
+                6, 0.7,   // Semi-transparent when far
+                10, 0.85, // More solid as you zoom in
+                14, 0.95
+            ],
             'fill-extrusion-vertical-gradient': true
         }
     }, 'layer-buildings');
     
-    // Markers (flat circles for far zoom)
+    // Markers (flat circles ONLY when zoomed out - overlap with 3D for smooth transition)
     map.addLayer({
         id: 'layer-markers', type: 'circle', source: 'facilities',
-        maxzoom: 10,
+        minzoom: 4,
+        maxzoom: 12, // Extend a bit for smooth transition
         paint: {
-            'circle-radius': ['interpolate',['linear'],['zoom'],4,2.5,8,5,10,8],
-            'circle-color': '#FF6B35', 'circle-opacity': 0.85,
-            'circle-stroke-width': ['interpolate',['linear'],['zoom'],4,0.5,10,2],
-            'circle-stroke-color': 'rgba(255,255,255,0.6)', 'circle-blur': 0.1,
+            'circle-radius': ['interpolate',['linear'],['zoom'],4,2.5,8,5,10,8,12,4],
+            'circle-color': '#FF6B35', 
+            'circle-opacity': [
+                'interpolate', ['linear'], ['zoom'],
+                4, 0.85,
+                10, 0.6,  // Fade out as 3D buildings appear
+                12, 0
+            ],
+            'circle-stroke-width': ['interpolate',['linear'],['zoom'],4,0.5,10,2,12,1],
+            'circle-stroke-color': 'rgba(255,255,255,0.6)', 
+            'circle-blur': 0.1,
         }
     });
 
@@ -616,12 +712,25 @@ function addMapLayers() {
 
     // Click handlers for both 2D markers and 3D models
     const handleFacilityClick = (e) => {
+        e.preventDefault();
         const f = e.features[0];
-        const lngLat = e.lngLat;
-        map.flyTo({ center: lngLat, zoom: Math.max(map.getZoom(), 16), pitch: 60, duration: 1500 });
-        if (!layerState.buildings) toggleLayer('buildings');
+        
+        // Use the EXACT facility coordinates from GeoJSON, not the click position
+        // This ensures the 3D pin aligns perfectly with the 2D marker
+        const facilityCoords = f.geometry.coordinates;
+        const lngLat = { lng: facilityCoords[0], lat: facilityCoords[1] };
+        
+        console.log('🖱️ Facility clicked:', f.properties.name, 'at exact coords', facilityCoords);
+        
+        // Pass both lngLat and geometry to showDetail
+        const props = {
+            ...f.properties,
+            geometry: f.geometry, // Include geometry for coordinate extraction
+            coords: facilityCoords // Use exact facility coordinates
+        };
+        
         // showDetail triggers 3D model + narration
-        showDetail(f.properties, lngLat);
+        showDetail(props, lngLat);
     };
     
     map.on('click', 'layer-markers', handleFacilityClick);
@@ -783,6 +892,8 @@ function selectResult(i) {
 }
 
 function replaceMapWithResults(results) {
+    console.log('🎯 Filtering map to show', results.length, 'matching facilities');
+    
     // Build GeoJSON from search results ONLY
     const filteredGeoJSON = {
         type: 'FeatureCollection',
@@ -802,14 +913,57 @@ function replaceMapWithResults(results) {
         }))
     };
     
-    // Update the map source to show ONLY these facilities
+    // Convert Points to Polygons for 3D extrusion
+    const filteredPolygons = {
+        type: 'FeatureCollection',
+        features: results.map(r => {
+            const [lng, lat] = r.coords;
+            return {
+                type: 'Feature',
+                geometry: { type: 'Polygon', coordinates: [pointToPolygon(lng, lat)] },
+                properties: {
+                    name: r.name,
+                    city: r.city,
+                    region: r.region,
+                    facility_type: r.facility_type,
+                    specialties: r.specialties,
+                    equipment: r.equipment,
+                    capability: r.capability,
+                    distance: r.distance,
+                }
+            };
+        })
+    };
+    
+    // Update BOTH sources to show ONLY these facilities
     map.getSource('facilities').setData(filteredGeoJSON);
+    map.getSource('facilities-3d').setData(filteredPolygons);
+    console.log('✅ Map updated with', results.length, '3D buildings');
 }
 
 function resetMapToAllFacilities() {
+    console.log('🔄 Resetting map to show all', facilitiesGeoJSON?.features.length || 0, 'facilities');
+    
     // Restore all facilities
     if (facilitiesGeoJSON) {
         map.getSource('facilities').setData(facilitiesGeoJSON);
+        
+        // Also restore the 3D polygons
+        const allPolygons = {
+            type: 'FeatureCollection',
+            features: facilitiesGeoJSON.features.map(f => {
+                const [lng, lat] = f.geometry.coordinates;
+                return {
+                    ...f,
+                    geometry: {
+                        type: 'Polygon',
+                        coordinates: [pointToPolygon(lng, lat)]
+                    }
+                };
+            })
+        };
+        map.getSource('facilities-3d').setData(allPolygons);
+        console.log('✅ All 3D buildings restored');
     }
 }
 
@@ -895,21 +1049,52 @@ function showDetail(props, lngLat) {
 
     document.getElementById('detail-card').classList.add('show');
     
-    // Add 3D hospital model at facility location
-    const coords = lngLat ? [lngLat.lng, lngLat.lat] : (props.coords || [0, 0]);
-    add3DHospitalModel(coords, props.name || 'Hospital');
+    // Extract coordinates - PRIORITIZE the exact click position (lngLat)
+    // This is the most accurate as it's where the user actually clicked
+    let coords;
+    if (lngLat && typeof lngLat.lng === 'number' && typeof lngLat.lat === 'number') {
+        // Use the exact click position - Mapbox LngLat object [lng, lat]
+        coords = [lngLat.lng, lngLat.lat];
+        console.log('📍 Using EXACT click position:', coords);
+    } else if (props.geometry && props.geometry.coordinates && Array.isArray(props.geometry.coordinates)) {
+        // GeoJSON coordinates are [lng, lat]
+        coords = props.geometry.coordinates;
+        console.log('📍 Using geometry coordinates:', coords);
+    } else if (props.coords && Array.isArray(props.coords) && props.coords.length === 2) {
+        // Fallback to coords property
+        coords = props.coords;
+        console.log('📍 Using props.coords:', coords);
+    } else {
+        console.error('❌ No valid coordinates found for facility:', props.name);
+        return;
+    }
     
-    // Narrate with ElevenLabs
+    // Ensure coordinates are in [lng, lat] format (Mapbox standard)
+    if (coords.length !== 2 || typeof coords[0] !== 'number' || typeof coords[1] !== 'number') {
+        console.error('❌ Invalid coordinate format:', coords);
+        return;
+    }
+    
+    console.log('📍 Showing detail for:', props.name, 'at EXACT coords [lng, lat]:', coords);
+    
+    // Cinematic camera fly-in to hospital
+    cinematicFlyTo(coords, props.name || 'Hospital');
+    
+    // Add 3D hospital model after camera starts moving (model will rise as camera approaches)
+    // Wait a bit longer to ensure map is ready and camera is zooming in
+    setTimeout(() => {
+        console.log('🏥 Adding 3D model at:', coords);
+        add3DHospitalModel(coords, props.name || 'Hospital');
+    }, 1000);
+    
+    // Narrate with ElevenLabs TTS
     narrateFacility(props);
 }
 
 function closeDetail() { 
     document.getElementById('detail-card').classList.remove('show'); 
-    // Remove 3D model
-    if (current3DModel && map.getLayer(current3DModel)) {
-        map.removeLayer(current3DModel);
-        current3DModel = null;
-    }
+    // Keep 3D model and pin visible when zoomed in (don't remove it)
+    // The pin helps users know where the hospital is located
     // Stop audio
     if (audioElement) {
         audioElement.pause();
@@ -1018,19 +1203,93 @@ document.getElementById('inp-radius').addEventListener('input', e => {
 map.on('zoom', () => { if (map.getZoom() >= 14 && !layerState.buildings) toggleLayer('buildings'); });
 
 // ═══════════════════════════════════════════════════════════════
-// 3D HOSPITAL MODEL (three.js) — Modern multi-story hospital
+// CINEMATIC CAMERA FLY-IN
+// ═══════════════════════════════════════════════════════════════
+function cinematicFlyTo(coords, name) {
+    // Enable buildings layer automatically
+    if (!layerState.buildings) toggleLayer('buildings');
+    
+    // Ensure coords are in [lng, lat] format for Mapbox
+    let centerCoords;
+    if (Array.isArray(coords) && coords.length === 2) {
+        // GeoJSON coordinates are [lng, lat], which is what Mapbox expects
+        centerCoords = [Number(coords[0]), Number(coords[1])]; // Ensure numbers
+    } else {
+        console.error('❌ Invalid coordinates for flyTo:', coords);
+        return;
+    }
+    
+    console.log('🎥 Flying to EXACT coordinates [lng, lat]:', centerCoords);
+    
+    // Add a temporary marker to show exactly where we're centering
+    const marker = new mapboxgl.Marker({ color: '#FF6B35', scale: 1.5 })
+        .setLngLat(centerCoords)
+        .addTo(map);
+    setTimeout(() => marker.remove(), 3000); // Remove after 3 seconds
+    
+    // Dramatic camera sequence: zoom in with orbit, centered EXACTLY on the point
+    map.flyTo({
+        center: centerCoords, // Exact coordinates [lng, lat] - this is the clicked point
+        zoom: 18.5, // Higher zoom to see the building clearly
+        pitch: 75, // Steeper pitch to see the building from above
+        bearing: map.getBearing() + 40, // Slight rotation for cinematic effect
+        duration: 2500,
+        essential: true,
+        curve: 1.8, // Smooth curve
+    });
+    
+    // Double-check after animation completes
+    map.once('moveend', () => {
+        const currentCenter = map.getCenter();
+        const distance = Math.sqrt(
+            Math.pow(currentCenter.lng - centerCoords[0], 2) + 
+            Math.pow(currentCenter.lat - centerCoords[1], 2)
+        );
+        console.log('✅ Camera centered. Distance from target:', (distance * 111320).toFixed(2), 'meters');
+    });
+    
+    // Wait for camera to finish before adding 3D model (handled in showDetail)
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 3D HOSPITAL MODEL (three.js) — Animated modern hospital
 // ═══════════════════════════════════════════════════════════════
 function add3DHospitalModel(coords, name) {
     console.log('🏥 Adding 3D hospital model at:', coords, name);
     
-    if (!window.THREE) { console.error('❌ THREE.js not loaded!'); return; }
+    if (!window.THREE) { 
+        console.error('❌ THREE.js not loaded! Waiting...');
+        setTimeout(() => add3DHospitalModel(coords, name), 500);
+        return;
+    }
     
-    // Remove old model layer
+    if (!map || !map.isStyleLoaded()) {
+        console.warn('⚠️ Map not ready, waiting...');
+        setTimeout(() => add3DHospitalModel(coords, name), 500);
+        return;
+    }
+    
+    // Validate coordinates
+    if (!Array.isArray(coords) || coords.length !== 2 || !coords[0] || !coords[1]) {
+        console.error('❌ Invalid coordinates:', coords);
+        return;
+    }
+    
+    // Remove old 3D model layer first to prevent conflicts
     if (current3DModel && map.getLayer(current3DModel)) {
-        map.removeLayer(current3DModel);
+        console.log('🗑️ Removing old 3D model layer:', current3DModel);
+        try {
+            map.removeLayer(current3DModel);
+            if (map.getSource(current3DModel + '-source')) {
+                map.removeSource(current3DModel + '-source');
+            }
+        } catch (e) {
+            console.warn('⚠️ Error removing old layer:', e);
+        }
     }
     
     const merc = mapboxgl.MercatorCoordinate.fromLngLat(coords, 0);
+    console.log('📍 Mercator coords:', merc.x, merc.y, merc.z);
     const modelTransform = {
         translateX: merc.x, translateY: merc.y, translateZ: merc.z,
         rotateX: Math.PI / 2, rotateY: 0, rotateZ: 0,
@@ -1038,7 +1297,7 @@ function add3DHospitalModel(coords, name) {
     };
     
     const THREE = window.THREE;
-    const layerId = '3d-model-hospital';
+    const layerId = '3d-model-hospital-' + Date.now(); // Unique ID to prevent conflicts
     current3DModel = layerId;
     
     const customLayer = {
@@ -1047,134 +1306,320 @@ function add3DHospitalModel(coords, name) {
             this.camera = new THREE.Camera();
             this.scene = new THREE.Scene();
             this.clock = new THREE.Clock();
+            this.riseProgress = 0; // Animation: 0 → 1 rise from ground
             
-            // Lighting
-            this.scene.add(new THREE.AmbientLight(0xccddff, 0.6));
-            const sun = new THREE.DirectionalLight(0xffffff, 1.0);
-            sun.position.set(50, -80, 120);
+            // ── Atmospheric Lighting ──
+            this.scene.add(new THREE.AmbientLight(0xccddff, 0.5));
+            const sun = new THREE.DirectionalLight(0xfffaf0, 1.2);
+            sun.position.set(60, -100, 150);
+            sun.castShadow = true;
             this.scene.add(sun);
-            const fill = new THREE.DirectionalLight(0x8899cc, 0.4);
-            fill.position.set(-40, 60, 80);
-            this.scene.add(fill);
+            const rim = new THREE.DirectionalLight(0x88bbff, 0.3);
+            rim.position.set(-80, 50, 60);
+            this.scene.add(rim);
+            const warm = new THREE.PointLight(0xFF6B35, 0.8, 300);
+            warm.position.set(0, -20, 15);
+            this.scene.add(warm);
             
             // ── Materials ──
-            const wallMat = new THREE.MeshPhongMaterial({ color: 0xf0f0f0, specular: 0x222222, shininess: 30 });
-            const glassMat = new THREE.MeshPhongMaterial({ color: 0x88ccff, specular: 0xffffff, shininess: 100, opacity: 0.6, transparent: true });
-            const accentMat = new THREE.MeshPhongMaterial({ color: 0xFF6B35, specular: 0xff8855, shininess: 60 });
-            const crossMat = new THREE.MeshPhongMaterial({ color: 0xff0000, emissive: 0xff2200, emissiveIntensity: 0.5 });
-            const roofMat = new THREE.MeshPhongMaterial({ color: 0x445566 });
-            const padMat = new THREE.MeshPhongMaterial({ color: 0x334455 });
+            const wallMat = new THREE.MeshPhongMaterial({ color: 0xf5f5f0, specular: 0x333333, shininess: 40 });
+            const glassMat = new THREE.MeshPhongMaterial({ color: 0x66bbff, specular: 0xffffff, shininess: 120, opacity: 0.55, transparent: true });
+            const accentMat = new THREE.MeshPhongMaterial({ color: 0xFF6B35, specular: 0xff8855, shininess: 80, emissive: 0x331100, emissiveIntensity: 0.2 });
+            const crossMat = new THREE.MeshPhongMaterial({ color: 0xff0000, emissive: 0xff1100, emissiveIntensity: 0.8 });
+            const roofMat = new THREE.MeshPhongMaterial({ color: 0x3a4a5a, specular: 0x111111 });
+            const padMat = new THREE.MeshPhongMaterial({ color: 0x2a3a4a });
+            const frameMat = new THREE.MeshPhongMaterial({ color: 0x888888, specular: 0xaaaaaa, shininess: 60 });
             
-            const hospital = new THREE.Group();
+            this.hospital = new THREE.Group();
             
-            // ── Main building (60×30×40m, 5 floors) ──
-            const mainBody = new THREE.Mesh(new THREE.BoxGeometry(60, 30, 40), wallMat);
-            mainBody.position.set(0, 0, 20);
-            hospital.add(mainBody);
+            // ── Main tower (modern, ~6 floors) ──
+            const mainBody = new THREE.Mesh(new THREE.BoxGeometry(50, 26, 48), wallMat);
+            mainBody.position.set(0, 0, 24);
+            this.hospital.add(mainBody);
             
-            // ── Glass window strips per floor ──
-            for (let f = 0; f < 5; f++) {
-                const z = 5 + f * 8;
-                // Front windows
-                const winF = new THREE.Mesh(new THREE.BoxGeometry(56, 0.5, 4), glassMat);
-                winF.position.set(0, -15.3, z);
-                hospital.add(winF);
-                // Back windows
-                const winB = new THREE.Mesh(new THREE.BoxGeometry(56, 0.5, 4), glassMat);
-                winB.position.set(0, 15.3, z);
-                hospital.add(winB);
-                // Side windows
-                const winL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 26, 4), glassMat);
-                winL.position.set(-30.3, 0, z);
-                hospital.add(winL);
-                const winR = new THREE.Mesh(new THREE.BoxGeometry(0.5, 26, 4), glassMat);
-                winR.position.set(30.3, 0, z);
-                hospital.add(winR);
+            // ── Glass curtain wall (front facade) ──
+            const curtainWall = new THREE.Mesh(new THREE.BoxGeometry(48, 0.3, 44), glassMat);
+            curtainWall.position.set(0, -13.2, 24);
+            this.hospital.add(curtainWall);
+            
+            // ── Window mullions (horizontal floor lines) ──
+            for (let f = 0; f < 6; f++) {
+                const z = 4 + f * 8;
+                const mullion = new THREE.Mesh(new THREE.BoxGeometry(50.5, 0.6, 0.3), frameMat);
+                mullion.position.set(0, -13.3, z);
+                this.hospital.add(mullion);
+            }
+            // Vertical mullions
+            for (let v = -4; v <= 4; v++) {
+                const vert = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.6, 44), frameMat);
+                vert.position.set(v * 5.5, -13.3, 24);
+                this.hospital.add(vert);
             }
             
-            // ── Side wings (smaller, 2 floors each) ──
-            const wingGeo = new THREE.BoxGeometry(20, 20, 16);
-            const wingL = new THREE.Mesh(wingGeo, wallMat);
-            wingL.position.set(-40, 0, 8);
-            hospital.add(wingL);
-            const wingR = new THREE.Mesh(wingGeo, wallMat);
-            wingR.position.set(40, 0, 8);
-            hospital.add(wingR);
-            
-            // Wing glass
-            for (let f = 0; f < 2; f++) {
-                const z = 3 + f * 8;
-                [wingL, wingR].forEach(w => {
-                    const wg = new THREE.Mesh(new THREE.BoxGeometry(18, 0.5, 3), glassMat);
-                    wg.position.set(w.position.x, w.position.y - 10.3, z);
-                    hospital.add(wg);
-                });
+            // ── Back + side glass strips ──
+            for (let f = 0; f < 6; f++) {
+                const z = 4 + f * 8;
+                const winB = new THREE.Mesh(new THREE.BoxGeometry(46, 0.3, 4), glassMat);
+                winB.position.set(0, 13.2, z);
+                this.hospital.add(winB);
+                const winL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 22, 4), glassMat);
+                winL.position.set(-25.2, 0, z);
+                this.hospital.add(winL);
+                const winR = new THREE.Mesh(new THREE.BoxGeometry(0.3, 22, 4), glassMat);
+                winR.position.set(25.2, 0, z);
+                this.hospital.add(winR);
             }
             
-            // ── Accent stripe along top ──
-            const stripe = new THREE.Mesh(new THREE.BoxGeometry(62, 31, 2), accentMat);
-            stripe.position.set(0, 0, 41);
-            hospital.add(stripe);
+            // ── Lower wing (emergency / outpatient) ──
+            const wing = new THREE.Mesh(new THREE.BoxGeometry(30, 22, 14), wallMat);
+            wing.position.set(-40, 0, 7);
+            this.hospital.add(wing);
+            const wingGlass = new THREE.Mesh(new THREE.BoxGeometry(28, 0.3, 10), glassMat);
+            wingGlass.position.set(-40, -11.2, 7);
+            this.hospital.add(wingGlass);
             
-            // ── Roof ──
-            const roof = new THREE.Mesh(new THREE.BoxGeometry(64, 33, 1), roofMat);
-            roof.position.set(0, 0, 42);
-            hospital.add(roof);
+            // ── Emergency entrance with glowing sign ──
+            const emergDoor = new THREE.Mesh(new THREE.BoxGeometry(12, 6, 0.5), new THREE.MeshPhongMaterial({ color: 0xff3333, emissive: 0xff0000, emissiveIntensity: 0.6, transparent: true, opacity: 0.8 }));
+            emergDoor.position.set(-40, -14, 3);
+            this.hospital.add(emergDoor);
             
-            // ── Helipad on roof ──
-            const padCircle = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 0.3, 32), padMat);
+            // ── Connector corridor ──
+            const corridor = new THREE.Mesh(new THREE.BoxGeometry(5, 22, 12), glassMat);
+            corridor.position.set(-24, 0, 6);
+            this.hospital.add(corridor);
+            
+            // ── Accent stripe (brand color wrap at top) ──
+            const stripe = new THREE.Mesh(new THREE.BoxGeometry(51, 27, 2.5), accentMat);
+            stripe.position.set(0, 0, 48.5);
+            this.hospital.add(stripe);
+            
+            // ── Roof equipment ──
+            const roof = new THREE.Mesh(new THREE.BoxGeometry(54, 29, 0.5), roofMat);
+            roof.position.set(0, 0, 50);
+            this.hospital.add(roof);
+            
+            // HVAC units
+            for (let i = 0; i < 3; i++) {
+                const hvac = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 3), new THREE.MeshPhongMaterial({ color: 0x667788 }));
+                hvac.position.set(-15 + i * 15, 8, 51.5);
+                this.hospital.add(hvac);
+            }
+            
+            // ── Helipad ──
+            const padCircle = new THREE.Mesh(new THREE.CylinderGeometry(9, 9, 0.2, 48), padMat);
             padCircle.rotation.x = Math.PI / 2;
-            padCircle.position.set(0, 0, 42.5);
-            hospital.add(padCircle);
+            padCircle.position.set(10, -5, 50.3);
+            this.hospital.add(padCircle);
+            // Helipad ring
+            const padRing = new THREE.Mesh(new THREE.RingGeometry(7, 8.5, 48), new THREE.MeshPhongMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
+            padRing.rotation.x = -Math.PI / 2;
+            padRing.position.set(10, -5, 50.5);
+            this.hospital.add(padRing);
             // H marking
-            const hMat = new THREE.MeshPhongMaterial({ color: 0xffffff });
-            const hLeft = new THREE.Mesh(new THREE.BoxGeometry(1, 6, 0.2), hMat);
-            hLeft.position.set(-2, 0, 42.8);
-            hospital.add(hLeft);
-            const hRight = new THREE.Mesh(new THREE.BoxGeometry(1, 6, 0.2), hMat);
-            hRight.position.set(2, 0, 42.8);
-            hospital.add(hRight);
-            const hMid = new THREE.Mesh(new THREE.BoxGeometry(5, 1, 0.2), hMat);
-            hMid.position.set(0, 0, 42.8);
-            hospital.add(hMid);
+            const hMat = new THREE.MeshPhongMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.3 });
+            [[10-2.5, -5, 50.6, 1.2, 7, 0.15], [10+2.5, -5, 50.6, 1.2, 7, 0.15], [10, -5, 50.6, 6, 1.2, 0.15]].forEach(([x,y,z,w,h,d]) => {
+                const hPart = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), hMat);
+                hPart.position.set(x, y, z);
+                this.hospital.add(hPart);
+            });
             
-            // ── Entrance canopy ──
-            const canopy = new THREE.Mesh(new THREE.BoxGeometry(16, 8, 1), accentMat);
-            canopy.position.set(0, -19, 10);
-            hospital.add(canopy);
+            // ── Main entrance (glass canopy) ──
+            const canopy = new THREE.Mesh(new THREE.BoxGeometry(14, 10, 0.5), glassMat);
+            canopy.position.set(0, -18, 12);
+            this.hospital.add(canopy);
+            // Canopy supports
+            [[-6, -18, 6], [6, -18, 6]].forEach(([x,y,z]) => {
+                const col = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 12, 8), frameMat);
+                col.rotation.x = Math.PI / 2;
+                col.position.set(x, y, z);
+                this.hospital.add(col);
+            });
             
-            // ── Red cross sign on entrance ──
-            const cH = new THREE.Mesh(new THREE.BoxGeometry(8, 0.5, 2), crossMat);
-            cH.position.set(0, -15.5, 22);
-            hospital.add(cH);
-            const cV = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 8), crossMat);
-            cV.position.set(0, -15.5, 22);
-            hospital.add(cV);
+            // ── Red cross (front, illuminated) ──
+            const cH = new THREE.Mesh(new THREE.BoxGeometry(8, 0.3, 2.5), crossMat);
+            cH.position.set(0, -13.5, 38);
+            this.hospital.add(cH);
+            const cV = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.3, 8), crossMat);
+            cV.position.set(0, -13.5, 38);
+            this.hospital.add(cV);
             
-            // ── Pulsing beacon on roof ──
-            this.beacon = new THREE.PointLight(0xff0000, 2, 200);
-            this.beacon.position.set(0, 0, 48);
-            hospital.add(this.beacon);
+            // ── Pulsing beacon ──
+            this.beacon = new THREE.PointLight(0xff0000, 2, 250);
+            this.beacon.position.set(0, 0, 55);
+            this.hospital.add(this.beacon);
+            // Beacon visual sphere
+            const beaconSphere = new THREE.Mesh(
+                new THREE.SphereGeometry(0.8, 16, 16),
+                new THREE.MeshPhongMaterial({ color: 0xff0000, emissive: 0xff0000, emissiveIntensity: 1.0, transparent: true, opacity: 0.9 })
+            );
+            beaconSphere.position.copy(this.beacon.position);
+            this.hospital.add(beaconSphere);
+            this.beaconSphere = beaconSphere;
             
-            // ── Ground pad ──
-            const ground = new THREE.Mesh(new THREE.BoxGeometry(100, 60, 0.5), new THREE.MeshPhongMaterial({ color: 0x445544 }));
-            ground.position.set(0, 0, -0.25);
-            hospital.add(ground);
+            // ── 3D Pin/Marker on top of building (always visible when zoomed in) ──
+            const pinGroup = new THREE.Group();
+            const pinMat = new THREE.MeshPhongMaterial({ 
+                color: 0xFF6B35, 
+                emissive: 0xFF6B35, 
+                emissiveIntensity: 0.6, // Brighter
+                specular: 0xffffff,
+                shininess: 60
+            });
+            const pinGlowMat = new THREE.MeshPhongMaterial({ 
+                color: 0xFF6B35, 
+                emissive: 0xFF6B35, 
+                emissiveIntensity: 1.0, // Brighter glow
+                transparent: true,
+                opacity: 0.7
+            });
             
-            this.scene.add(hospital);
+            // Pin base (cone shape) - larger for better visibility
+            const pinBase = new THREE.Mesh(
+                new THREE.ConeGeometry(3.5, 10, 16), // Bigger
+                pinMat
+            );
+            pinBase.rotation.x = Math.PI;
+            pinBase.position.set(0, 0, 50.5);
+            pinGroup.add(pinBase);
+            
+            // Pin top (sphere) - larger for better visibility
+            const pinTop = new THREE.Mesh(
+                new THREE.SphereGeometry(3.0, 16, 16), // Bigger
+                pinMat
+            );
+            pinTop.position.set(0, 0, 55.5); // Higher
+            pinGroup.add(pinTop);
+            
+            // Glow ring around pin - larger
+            const pinGlow = new THREE.Mesh(
+                new THREE.TorusGeometry(3.5, 0.4, 8, 16), // Bigger
+                pinGlowMat
+            );
+            pinGlow.rotation.x = Math.PI / 2;
+            pinGlow.position.set(0, 0, 53);
+            pinGroup.add(pinGlow);
+            
+            // Pin shadow/ring on roof - larger
+            const pinShadow = new THREE.Mesh(
+                new THREE.RingGeometry(3.5, 5, 16), // Bigger
+                new THREE.MeshPhongMaterial({ color: 0x000000, transparent: true, opacity: 0.4, side: THREE.DoubleSide })
+            );
+            pinShadow.rotation.x = -Math.PI / 2;
+            pinShadow.position.set(0, 0, 50.1);
+            pinGroup.add(pinShadow);
+            
+            this.hospital.add(pinGroup);
+            this.pinGroup = pinGroup; // Store reference for animation
+            
+            // ── Ground platform with subtle glow and clear marker ──
+            const ground = new THREE.Mesh(
+                new THREE.CylinderGeometry(55, 60, 0.4, 64),
+                new THREE.MeshPhongMaterial({ color: 0x2a3a2a, transparent: true, opacity: 0.7 })
+            );
+            ground.rotation.x = Math.PI / 2;
+            ground.position.set(0, 0, -0.2);
+            this.hospital.add(ground);
+            
+            // ── Bright ground marker to show exact position ──
+            const groundMarker = new THREE.Mesh(
+                new THREE.CircleGeometry(8, 32),
+                new THREE.MeshBasicMaterial({ 
+                    color: 0xFF6B35, 
+                    transparent: true, 
+                    opacity: 0.9,
+                    side: THREE.DoubleSide 
+                })
+            );
+            groundMarker.rotation.x = -Math.PI / 2;
+            groundMarker.position.set(0, 0, 0.1); // Just above ground
+            this.hospital.add(groundMarker);
+            this.groundMarker = groundMarker;
+            
+            // ── Particle ring (floating lights around building) ──
+            this.particles = [];
+            const particleMat = new THREE.MeshBasicMaterial({ color: 0xFF6B35, transparent: true, opacity: 0.8 });
+            for (let i = 0; i < 20; i++) {
+                const p = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), particleMat.clone());
+                const angle = (i / 20) * Math.PI * 2;
+                p.userData.angle = angle;
+                p.userData.radius = 35 + Math.random() * 10;
+                p.userData.speed = 0.3 + Math.random() * 0.3;
+                p.userData.zBase = 10 + Math.random() * 30;
+                p.userData.zAmp = 5 + Math.random() * 10;
+                this.hospital.add(p);
+                this.particles.push(p);
+            }
+            
+            // Start with hospital underground (for rise animation)
+            this.hospital.position.z = -0.06; // will animate to 0
+            this.scene.add(this.hospital);
             
             this.map = map;
             this.renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
             this.renderer.autoClear = false;
+            
+            console.log('🏗️ 3D Hospital building constructed and ready to render');
         },
         render: function (gl, matrix) {
-            // Pulse the beacon
-            if (this.beacon && this.clock) {
-                const t = this.clock.getElapsedTime();
-                this.beacon.intensity = 1 + Math.sin(t * 3) * 1.5;
+            const THREE = window.THREE;
+            if (!this.clock) return;
+            const t = this.clock.getElapsedTime();
+            
+            // Log first render
+            if (!this._hasRendered) {
+                console.log('🎨 3D building is now rendering!');
+                this._hasRendered = true;
             }
             
-            const THREE = window.THREE;
+            // ── Rise animation (0 → 1 over 2 seconds) ──
+            if (this.riseProgress < 1) {
+                this.riseProgress = Math.min(1, this.riseProgress + 0.015);
+                const ease = 1 - Math.pow(1 - this.riseProgress, 3); // ease-out cubic
+                this.hospital.position.z = -0.06 * (1 - ease);
+                this.hospital.scale.z = 0.01 + ease * 0.99; // scale from flat to full height
+            }
+            
+            // ── Pulsing beacon ──
+            if (this.beacon) {
+                this.beacon.intensity = 1.5 + Math.sin(t * 4) * 1.5;
+                if (this.beaconSphere) {
+                    this.beaconSphere.material.opacity = 0.5 + Math.sin(t * 4) * 0.4;
+                    this.beaconSphere.scale.setScalar(0.8 + Math.sin(t * 4) * 0.3);
+                }
+            }
+            
+            // ── Animated pin/marker (pulsing and rotating) ──
+            if (this.pinGroup) {
+                // Gentle pulsing scale
+                const pulseScale = 1 + Math.sin(t * 2) * 0.1;
+                this.pinGroup.scale.setScalar(pulseScale);
+                
+                // Slow rotation for visibility
+                this.pinGroup.rotation.z = t * 0.3;
+                
+                // Slight vertical bounce (pinGroup is at hospital center, so we add bounce to z)
+                const bounce = Math.sin(t * 1.5) * 0.5;
+                this.pinGroup.position.z = bounce; // Pin base is at 50.5 relative to pinGroup, so this adds bounce
+            }
+            
+            // ── Pulsing ground marker ──
+            if (this.groundMarker) {
+                const groundPulse = 1 + Math.sin(t * 3) * 0.3;
+                this.groundMarker.scale.setScalar(groundPulse);
+                this.groundMarker.material.opacity = 0.6 + Math.sin(t * 3) * 0.3;
+            }
+            
+            // ── Orbiting particles ──
+            if (this.particles) {
+                this.particles.forEach(p => {
+                    const angle = p.userData.angle + t * p.userData.speed;
+                    p.position.x = Math.cos(angle) * p.userData.radius;
+                    p.position.y = Math.sin(angle) * p.userData.radius;
+                    p.position.z = p.userData.zBase + Math.sin(t * 1.5 + p.userData.angle) * p.userData.zAmp;
+                    p.material.opacity = 0.3 + Math.sin(t * 2 + p.userData.angle) * 0.5;
+                });
+            }
+            
             const rX = new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(1,0,0), modelTransform.rotateX);
             const rY = new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(0,1,0), modelTransform.rotateY);
             const rZ = new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(0,0,1), modelTransform.rotateZ);
@@ -1192,8 +1637,42 @@ function add3DHospitalModel(coords, name) {
         }
     };
     
-    map.addLayer(customLayer);
-    console.log('✅ 3D hospital model layer added:', name);
+    // Wait for map style to be loaded before adding custom layer
+    if (map.isStyleLoaded()) {
+        try {
+            map.addLayer(customLayer);
+            console.log('✅ 3D hospital model layer added:', name);
+            
+            // Verify it was added
+            setTimeout(() => {
+                if (map.getLayer(layerId)) {
+                    console.log('✅ 3D building confirmed visible at:', coords);
+                } else {
+                    console.error('❌ Layer not found after adding!');
+                }
+            }, 100);
+        } catch (err) {
+            console.error('❌ Error adding 3D layer:', err);
+            // If layer already exists, try removing and re-adding
+            if (err.message && err.message.includes('already exists')) {
+                console.log('🔄 Layer exists, removing and re-adding...');
+                try {
+                    map.removeLayer(layerId);
+                    if (map.getSource(layerId + '-source')) {
+                        map.removeSource(layerId + '-source');
+                    }
+                    setTimeout(() => add3DHospitalModel(coords, name), 100);
+                } catch (e2) {
+                    console.error('❌ Failed to recover:', e2);
+                }
+            }
+        }
+    } else {
+        console.warn('⚠️ Map style not loaded, waiting...');
+        map.once('style.load', () => {
+            setTimeout(() => add3DHospitalModel(coords, name), 100);
+        });
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
